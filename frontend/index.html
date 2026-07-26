@@ -1,0 +1,2228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rural Rosters - Shift Manager</title>
+    <!-- PHASE 3: PWA manifest and mobile meta -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Rosters">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: #f5f5f5; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header { background: white; padding: 20px; border-bottom: 1px solid #e0e0e0; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { font-size: 24px; font-weight: 600; }
+        .user-info { display: flex; align-items: center; gap: 20px; }
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #2c3e50; color: white; }
+        .btn-primary:hover { background: #1a252f; }
+        .btn-secondary { background: #e0e0e0; color: #333; }
+        .btn-secondary:hover { background: #d0d0d0; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; }
+        .login-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: white; }
+        .login-card { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); text-align: center; max-width: 400px; }
+        .login-card h2 { font-size: 28px; margin-bottom: 10px; color: #2c3e50; }
+        .login-input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .login-button { width: 100%; padding: 12px; margin-top: 20px; }
+        .dashboard { display: none; }
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; flex-wrap: wrap; }
+        .tab-button { padding: 12px 20px; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; font-size: 14px; color: #666; transition: all 0.2s; }
+        .tab-button.active { color: #2c3e50; border-bottom-color: #2c3e50; }
+        .tab-content { display: none; background: white; padding: 20px; border-radius: 4px; }
+        .tab-content.active { display: block; }
+        .tab-content h3 { margin-bottom: 15px; }
+        .tab-content h4 { margin-bottom: 15px; margin-top: 20px; font-size: 16px; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; }
+        .message { padding: 12px 16px; border-radius: 4px; margin-bottom: 20px; font-size: 14px; }
+        .message.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .message.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .message.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; font-family: inherit; }
+        .location-item { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+        .location-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .location-item label { cursor: pointer; margin-bottom: 0; }
+        .shift-item { background: #f9f9f9; border-left: 4px solid #000; padding: 15px; margin-bottom: 12px; border-radius: 4px; }
+        .shift-item.red { border-left-color: #dc3545; background: #ffe6e6; }
+        .shift-item-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        .shift-item-header strong { font-size: 16px; flex: 1; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: #f0f0f0; padding: 12px; text-align: left; border-bottom: 1px solid #ddd; font-weight: 600; font-size: 13px; }
+        td { padding: 12px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        td input[type="date"], td input[type="text"] { width: 100%; padding: 6px; border: 1px solid #ddd; border-radius: 4px; }
+        td input[disabled] { background: #f9f9f9; cursor: not-allowed; }
+        a { color: #2c3e50; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .applicant-row { background: white; border: 1px solid #e0e0e0; padding: 12px; margin-bottom: 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; }
+        .applicant-info { flex: 1; }
+        .applicant-buttons { display: flex; gap: 8px; }
+        .applicant-buttons button { padding: 6px 12px; font-size: 12px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; padding: 30px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .modal-content h3 { margin-bottom: 20px; }
+        .modal-buttons { display: flex; gap: 10px; margin-top: 20px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .modal-header h3 { margin: 0; }
+        .info-icon { background: none; border: 2px solid #aaa; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; font-style: italic; font-weight: 700; cursor: pointer; color: #666; flex-shrink: 0; display: flex; align-items: center; justify-content: center; padding: 0; }
+        .info-icon:hover { border-color: #2c3e50; color: #2c3e50; }
+        .modal-help { display: none; background: #f0f9ff; border: 1px solid #bee5eb; border-radius: 4px; padding: 10px 14px; font-size: 13px; color: #0c5460; margin-bottom: 16px; line-height: 1.5; }
+        .modal-help.visible { display: block; }
+        .fortnight-grid { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; margin: 15px 0; }
+        .fortnight-day { text-align: center; font-size: 11px; font-weight: 600; padding: 8px; background: #f0f0f0; border-radius: 3px; }
+        .fortnight-checkbox { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 3px; min-height: 80px; }
+        .fortnight-checkbox input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .pending-banner { background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; color: #856404; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .pending-banner .banner-item { display: flex; align-items: center; gap: 6px; }
+        .pending-banner .banner-dot { width: 8px; height: 8px; border-radius: 50%; background: #f9a825; flex-shrink: 0; }
+        .settings-section { margin-bottom: 30px; }
+        .settings-section h4 { margin-bottom: 12px; margin-top: 0; }
+        .login-card { position: relative; }
+    </style>
+</head>
+<body>
+
+<!-- PHASE 3: offline indicator -->
+<div id="offlineBanner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:2000;background:#856404;color:#fff;text-align:center;padding:8px 12px;font-size:13px;">
+    You are offline — shift data cannot be loaded or submitted until your connection returns.
+</div>
+
+<div id="loginScreen" class="login-container">
+    <div class="login-card">
+        <div id="versionImageBlock" style="margin: -40px -40px 24px -40px; border-radius: 8px 8px 0 0; overflow: hidden; height: 180px; background: linear-gradient(135deg, #1a3a2a 0%, #2d6a4f 40%, #40916c 70%, #52b788 100%); display: flex; align-items: flex-end; justify-content: flex-start;">
+            <span id="versionImageCaption" style="display:none; color: rgba(255,255,255,0.7); font-size: 11px; padding: 8px 12px; font-style: italic;"></span>
+        </div>
+        <h2>Rural Rosters</h2>
+        <p id="versionDisplay" style="color: #888; font-size: 13px; margin-bottom: 4px; margin-top: 4px;"></p>
+        <input type="email" id="emailInput" class="login-input" placeholder="Email address" oninput="clearLoginError()">
+        <input type="password" id="passwordInput" class="login-input" placeholder="Password" oninput="clearLoginError()" onkeypress="if(event.key==='Enter') loginWithEmail()">
+        <div id="loginError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
+        <button class="btn-primary login-button" onclick="loginWithEmail()">Login</button>
+    </div>
+</div>
+
+<div id="mainDashboard" class="dashboard">
+    <div class="container">
+        <header>
+            <h1>Rural Rosters</h1>
+            <div class="user-info">
+                <span id="userNameDisplay"></span>
+                <button class="btn-secondary" onclick="logout()">Logout</button>
+            </div>
+        </header>
+        <div id="messageContainer"></div>
+        <!-- PHASE 3: notification enable banner -->
+        <div id="notifyBanner" style="display:none;background:#e8f4fd;border:1px solid #bee5eb;border-radius:4px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:#0c5460;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <span>Get notified on this device when shifts are requested, approved, or swapped.</span>
+                <span style="display:flex;gap:8px;">
+                    <button class="btn-primary" style="padding:6px 14px;font-size:13px;" onclick="enableNotifications()">Enable notifications</button>
+                    <button class="btn-secondary" style="padding:6px 14px;font-size:13px;" onclick="dismissNotifyBanner()">Not now</button>
+                </span>
+            </div>
+        </div>
+        <div id="pendingBanner" style="display:none;"></div>
+        <div class="tabs" id="tabsContainer"></div>
+        <div id="tabsContent"></div>
+    </div>
+</div>
+
+<div id="denySwapModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Deny Swap Request</h3>
+            <button class="info-icon" onclick="toggleModalHelp('denySwapHelp')" title="What is this?">i</button>
+        </div>
+        <div id="denySwapHelp" class="modal-help">
+            Use this to decline a swap request. Your reason will be emailed directly to the staff member so they understand why it was not approved. Be clear and professional — this message goes to them verbatim.
+        </div>
+        <p>Provide a reason for denying this swap:</p>
+        <textarea id="denyReason" style="width: 100%; height: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: inherit;" placeholder="Enter reason..."></textarea>
+        <div class="modal-buttons">
+            <button class="btn-danger" onclick="submitDenySwap()">Deny Swap</button>
+            <button class="btn-secondary" onclick="closeDenyModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="backupConfirmModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Shifts Already Applied For</h3>
+            <button class="info-icon" onclick="toggleModalHelp('backupHelp')" title="What is this?">i</button>
+        </div>
+        <div id="backupHelp" class="modal-help">
+            These shifts already have applications from another staff member awaiting officer approval. You can still apply — your application will be held as a backup in case the first applicant is denied.
+        </div>
+        <p style="margin-bottom:12px;">The following shifts you selected already have applications pending approval:</p>
+        <div id="backupShiftList" style="margin-bottom:16px;"></div>
+        <p style="font-size:13px;color:#666;">Would you like to add your application as a backup for these shifts?</p>
+        <div class="modal-buttons">
+            <button class="btn-success" onclick="confirmBackupRequest(true)">Yes, add me as backup</button>
+            <button class="btn-secondary" onclick="confirmBackupRequest(false)">No, skip these shifts</button>
+        </div>
+    </div>
+</div>
+
+<div id="fortnightModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Select Available Days for Swap</h3>
+            <button class="info-icon" onclick="toggleModalHelp('fortnightHelp')" title="What is this?">i</button>
+        </div>
+        <div id="fortnightHelp" class="modal-help">
+            Select the days in this pay fortnight when you are free to work in exchange for the shift you are offering. The other staff member will see these dates when considering your swap listing. You must select at least one day or night.
+        </div>
+        <p>Check which days in this fortnight you can work:</p>
+        <div id="fortnightGrid"></div>
+        <div id="fortnightError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="submitFortnightSelection()">Confirm</button>
+            <button class="btn-secondary" onclick="closeFortnightModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+
+<div id="proposalModal" class="modal">
+    <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <div class="modal-header">
+            <h3>Propose Shift Swap</h3>
+            <button class="info-icon" onclick="toggleModalHelp('proposalHelp')" title="What is this?">i</button>
+        </div>
+        <div id="proposalHelp" class="modal-help">
+            You are proposing to swap shifts with the person who listed the shift above. Select one of the dates they are available to cover — this must be a shift you are currently rostered to work and are willing to give up. Select the job type of that shift. Both parties will be notified by email, and the swap still requires officer approval before it is confirmed.
+        </div>
+        <div id="proposalShiftDetail" style="background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 14px;"></div>
+        <p id="proposalDatesInstruction" style="font-size: 14px; margin-bottom: 14px;"></p>
+        <div id="proposalDatesContainer" style="margin-bottom: 20px;"></div>
+        <h4 style="margin-bottom: 10px;">Your shift type to offer in return:</h4>
+        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Location is fixed as the same location. Select the job type of the shift you are giving up.</p>
+        <select id="proposalJobType" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 20px;">
+            <option value="">Select Job Type</option>
+        </select>
+        <div id="proposalError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:10px 14px;margin-bottom:12px;font-size:14px;"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="submitSwapProposal()">Offer to Take Swap</button>
+            <button class="btn-secondary" onclick="closeProposalModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // UPDATE THIS after first staging deploy — get URL from Cloud Run console
+    function toggleModalHelp(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('visible');
+    }
+
+    // ========== VERSION ==========
+    // Update these three constants for each major release
+    const VERSION_NAME = 'Crystal Cascades';
+    const VERSION_STAGE = 'Alpha \u2014 Sandbox';
+    // Wikimedia Commons CC BY-SA 3.0 — Barron Falls, Kuranda QLD
+    // Wikimedia Commons CC BY-SA 3.0 — Barron Falls, Kuranda QLD
+    const VERSION_IMAGE_URL = 'crystal-cascades.jpeg'; // graceful fallback if image absent
+
+    // QH pay fortnight anchor — Monday 25 May 2026
+    // All fortnights are 14-day cycles from this date
+    const QH_FORTNIGHT_ANCHOR = new Date(2026, 4, 25); // month is 0-indexed
+
+    function getQHFortnightStart(date) {
+        const msPerDay = 24 * 60 * 60 * 1000;
+        const daysSinceAnchor = Math.floor((date - QH_FORTNIGHT_ANCHOR) / msPerDay);
+        const fortnightNum = Math.floor(daysSinceAnchor / 14);
+        return new Date(QH_FORTNIGHT_ANCHOR.getTime() + fortnightNum * 14 * msPerDay);
+    }
+
+    const BACKEND_URL = 'https://ruralrostersproxy-staging-191282140713.australia-southeast1.run.app';
+
+    // ============================================================
+    // PHASE 3 — PWA, PUSH NOTIFICATIONS, OFFLINE (Crystal Cascades)
+    // ============================================================
+    
+    const VAPID_PUBLIC_KEY = 'REPLACE_WITH_VAPID_PUBLIC_KEY';
+    let deferredInstallPrompt = null;
+    
+    // ── Service worker registration ──
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('sw.js').then(reg => {
+                console.log('SW registered, scope:', reg.scope);
+            }).catch(err => console.error('SW registration failed:', err));
+        });
+    }
+    
+    // ── Install prompt (Add to Home Screen) ──
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredInstallPrompt = e;
+        showInstallButton();
+    });
+    
+    function showInstallButton() {
+        if (document.getElementById('installAppBtn')) return;
+        const card = document.querySelector('.login-card');
+        const userInfo = document.querySelector('.user-info');
+        const btn = document.createElement('button');
+        btn.id = 'installAppBtn';
+        btn.className = 'btn-secondary';
+        btn.textContent = 'Install app';
+        btn.style.cssText = 'margin-top:12px;width:100%;';
+        btn.onclick = async function() {
+            if (!deferredInstallPrompt) return;
+            deferredInstallPrompt.prompt();
+            await deferredInstallPrompt.userChoice;
+            deferredInstallPrompt = null;
+            btn.remove();
+        };
+        if (card && document.getElementById('loginScreen').style.display !== 'none') {
+            card.appendChild(btn);
+        } else if (userInfo) {
+            btn.style.cssText = 'margin-top:0;width:auto;';
+            userInfo.insertBefore(btn, userInfo.firstChild);
+        }
+    }
+    
+    window.addEventListener('appinstalled', () => {
+        const btn = document.getElementById('installAppBtn');
+        if (btn) btn.remove();
+    });
+    
+    // ── Offline indicator ──
+    function updateOnlineStatus() {
+        const banner = document.getElementById('offlineBanner');
+        if (banner) banner.style.display = navigator.onLine ? 'none' : 'block';
+    }
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    window.addEventListener('load', updateOnlineStatus);
+    
+    // ── Push notifications ──
+    function pushSupported() {
+        return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    }
+    
+    // Called from showDashboard() after login
+    function maybeShowNotifyBanner() {
+        const banner = document.getElementById('notifyBanner');
+        if (!banner) return;
+        if (!pushSupported() || !VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.startsWith('REPLACE')) {
+            banner.style.display = 'none';
+            return;
+        }
+        if (Notification.permission === 'granted') {
+            // Re-sync subscription silently (device may have a new endpoint)
+            subscribeToPush().catch(() => {});
+            banner.style.display = 'none';
+            return;
+        }
+        if (Notification.permission === 'denied') { banner.style.display = 'none'; return; }
+        if (sessionStorage.getItem('notifyBannerDismissed') === '1') { banner.style.display = 'none'; return; }
+        banner.style.display = 'block';
+    }
+    
+    function dismissNotifyBanner() {
+        sessionStorage.setItem('notifyBannerDismissed', '1');
+        const banner = document.getElementById('notifyBanner');
+        if (banner) banner.style.display = 'none';
+    }
+    
+    // Must be triggered by a user gesture (required on iOS, best practice everywhere)
+    async function enableNotifications() {
+        try {
+            const perm = await Notification.requestPermission();
+            const banner = document.getElementById('notifyBanner');
+            if (banner) banner.style.display = 'none';
+            if (perm !== 'granted') {
+                showMessage('Notifications not enabled — you can change this in your browser settings later.', 'info');
+                return;
+            }
+            await subscribeToPush();
+            showMessage('\u2713 Notifications enabled on this device', 'success');
+        } catch (err) {
+            console.error('enableNotifications error:', err);
+            showMessage('Could not enable notifications on this device', 'error');
+        }
+    }
+    
+    async function subscribeToPush() {
+        if (!currentUser || !pushSupported()) return;
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) {
+            sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+            });
+        }
+        await callBackend('savePushSubscription', {
+            email: currentUser.email,
+            subscription: JSON.stringify(sub)
+        });
+    }
+    
+    function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - base64String.length % 4) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = window.atob(base64);
+        const outputArray = new Uint8Array(rawData.length);
+        for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i);
+        return outputArray;
+    }
+    
+    // ============================================================
+    // PHASE 3 — AVAILABILITY BLACKOUTS (IndexedDB, device-local)
+    // ============================================================
+    
+    const BLACKOUT_DB = 'rural-rosters';
+    const BLACKOUT_STORE = 'blackouts';   // keyPath: date (YYYY-MM-DD)
+    const BLACKOUT_PREFS = 'prefs';       // keyPath: key
+    
+    function openBlackoutDB() {
+        return new Promise((resolve, reject) => {
+            const req = indexedDB.open(BLACKOUT_DB, 1);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(BLACKOUT_STORE)) db.createObjectStore(BLACKOUT_STORE, { keyPath: 'date' });
+                if (!db.objectStoreNames.contains(BLACKOUT_PREFS)) db.createObjectStore(BLACKOUT_PREFS, { keyPath: 'key' });
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => reject(req.error);
+        });
+    }
+    
+    async function getBlackoutDates() {
+        try {
+            const db = await openBlackoutDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(BLACKOUT_STORE, 'readonly');
+                const req = tx.objectStore(BLACKOUT_STORE).getAll();
+                req.onsuccess = () => resolve((req.result || []).map(r => r.date).sort());
+                req.onerror = () => resolve([]);
+            });
+        } catch (e) { return []; }
+    }
+    
+    async function addBlackoutDate(dateISO) {
+        const db = await openBlackoutDB();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
+            tx.objectStore(BLACKOUT_STORE).put({ date: dateISO, added: new Date().toISOString() });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+    
+    async function removeBlackoutDate(dateISO) {
+        const db = await openBlackoutDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
+            tx.objectStore(BLACKOUT_STORE).delete(dateISO);
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    }
+    
+    async function clearBlackoutDates() {
+        const db = await openBlackoutDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
+            tx.objectStore(BLACKOUT_STORE).clear();
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    }
+    
+    async function getBlackoutDisplayMode() {
+        try {
+            const db = await openBlackoutDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(BLACKOUT_PREFS, 'readonly');
+                const req = tx.objectStore(BLACKOUT_PREFS).get('displayMode');
+                req.onsuccess = () => resolve((req.result && req.result.value) || 'grey');
+                req.onerror = () => resolve('grey');
+            });
+        } catch (e) { return 'grey'; }
+    }
+    
+    async function setBlackoutDisplayMode(mode) {
+        const db = await openBlackoutDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction(BLACKOUT_PREFS, 'readwrite');
+            tx.objectStore(BLACKOUT_PREFS).put({ key: 'displayMode', value: mode });
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+        });
+    }
+    
+    // Converts DD/MM/YYYY (app format) to YYYY-MM-DD (blackout key format)
+    function toISODate(ddmmyyyy) {
+        const parts = String(ddmmyyyy).split('/');
+        if (parts.length !== 3) return '';
+        return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+    }
+    
+    // ── My Availability section (staff Settings tab) ──
+    
+    async function loadAvailabilitySection() {
+        const container = document.getElementById('availabilityContainer');
+        if (!container) return;
+        const [dates, mode] = await Promise.all([getBlackoutDates(), getBlackoutDisplayMode()]);
+        let listHtml = '';
+        if (dates.length === 0) {
+            listHtml = '<p style="color:#999;font-size:13px;">No unavailable dates set on this device.</p>';
+        } else {
+            listHtml = dates.map(d => {
+                const [y, m, day] = d.split('-');
+                return `<span style="display:inline-flex;align-items:center;gap:6px;background:#f0f0f0;border-radius:12px;padding:4px 10px;margin:0 6px 6px 0;font-size:13px;">
+                    ${day}/${m}/${y}
+                    <button onclick="removeBlackoutAndRefresh('${d}')" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;line-height:1;" title="Remove">\u00d7</button>
+                </span>`;
+            }).join('');
+            listHtml += `<div style="margin-top:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="clearBlackoutsAndRefresh()">Clear all</button></div>`;
+        }
+        container.innerHTML = `
+            <p style="color:#666;font-size:13px;margin-bottom:12px;">
+                Mark dates you cannot work. These are saved <strong>on this device only</strong> —
+                they are not shared with rostering officers and will not carry over to other phones or browsers.
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
+                <input type="date" id="blackoutDateInput" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
+                <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="addBlackoutAndRefresh()">Mark unavailable</button>
+            </div>
+            <div style="margin-bottom:14px;">${listHtml}</div>
+            <div style="font-size:13px;color:#666;">
+                Show shifts on unavailable dates as:
+                <label style="margin-left:10px;cursor:pointer;"><input type="radio" name="blackoutMode" value="grey" ${mode === 'grey' ? 'checked' : ''} onchange="setBlackoutModeAndRefresh('grey')"> Greyed out</label>
+                <label style="margin-left:10px;cursor:pointer;"><input type="radio" name="blackoutMode" value="hide" ${mode === 'hide' ? 'checked' : ''} onchange="setBlackoutModeAndRefresh('hide')"> Hidden</label>
+            </div>`;
+    }
+    
+    async function addBlackoutAndRefresh() {
+        const input = document.getElementById('blackoutDateInput');
+        if (!input || !input.value) { showMessage('Please pick a date first', 'error'); return; }
+        await addBlackoutDate(input.value);
+        input.value = '';
+        loadAvailabilitySection();
+    }
+    
+    async function removeBlackoutAndRefresh(dateISO) {
+        await removeBlackoutDate(dateISO);
+        loadAvailabilitySection();
+    }
+    
+    async function clearBlackoutsAndRefresh() {
+        await clearBlackoutDates();
+        loadAvailabilitySection();
+    }
+    
+    async function setBlackoutModeAndRefresh(mode) {
+        await setBlackoutDisplayMode(mode);
+    }
+
+    // AST qualification options — fixed controlled vocabulary matching the Shift Types sheet
+    // Emergency is always held; these are the two additional qualifications
+    const AST_QUALS = ['Anaesthetics', 'O&G'];
+
+    let currentUser = null;
+    let userRole = null;
+    let userLocations = [];
+    let userQuals = ['Emergency'];
+    let userPrimaryLocations = []; // Column H — pipe-delimited, subset of userLocations
+    let officerLocations = [];
+    let pendingDenySwap = null;
+    let pendingFortnightSwap = null;
+    let pendingProposal = null;
+    let pendingDenyProposal = null;
+
+    // Set version display and image on load
+    window.addEventListener('load', function() {
+        const vd = document.getElementById('versionDisplay');
+        if (vd) vd.textContent = VERSION_NAME + ' Version — ' + VERSION_STAGE;
+
+        const imageBlock = document.getElementById('versionImageBlock');
+        const caption = document.getElementById('versionImageCaption');
+        if (VERSION_IMAGE_URL && imageBlock) {
+            const img = document.createElement('img');
+            img.src = VERSION_IMAGE_URL;
+            img.alt = VERSION_NAME + ' Falls, Queensland';
+            img.style.cssText = 'width:100%;height:100%;object-fit:cover;object-position:center 30%;position:absolute;top:0;left:0;';
+            imageBlock.style.position = 'relative';
+            imageBlock.insertBefore(img, imageBlock.firstChild);
+            caption.style.display = 'block';
+            caption.style.position = 'relative';
+            caption.style.zIndex = '1';
+            caption.textContent = VERSION_NAME;
+            img.onerror = function() { img.remove(); caption.style.display = 'none'; };
+        }
+    });
+
+    async function callBackend(action, params) {
+        try {
+            const response = await fetch(BACKEND_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action, params})
+            });
+            return await response.json();
+        } catch(err) {
+            console.error('Backend error:', err);
+            return { error: err.toString() };
+        }
+    }
+
+    function showLoginError(msg) {
+        const el = document.getElementById('loginError');
+        if (el) { el.textContent = msg; el.style.display = 'block'; }
+    }
+
+    function clearLoginError() {
+        const el = document.getElementById('loginError');
+        if (el) { el.style.display = 'none'; el.textContent = ''; }
+    }
+
+    function loginWithEmail() {
+        const email = document.getElementById('emailInput').value.trim().toLowerCase();
+        const password = document.getElementById('passwordInput').value;
+
+        if (!email || !password) {
+            showLoginError('Please enter both email and password');
+            return;
+        }
+
+        callBackend('checkUserExists', {email, password}).then(user => {
+            if (user && user.error) {
+                showLoginError(user.error);
+                return;
+            }
+            if (user) {
+                currentUser = { email: user.email, name: user.name };
+                userRole = user.role;
+                userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
+                // Fix: actually load and store AST quals from login response
+                userQuals = user.astQuals ? user.astQuals.split(',').map(q => q.trim()) : ['Emergency'];
+                userPrimaryLocations = user.primaryLocations ? user.primaryLocations.split('|').map(l => l.trim()).filter(Boolean) : [];
+                showDashboard();
+            }
+        });
+    }
+
+    function showDashboard() {
+        document.getElementById('loginScreen').style.display = 'none';
+        document.getElementById('mainDashboard').style.display = 'block';
+        document.getElementById('userNameDisplay').textContent = currentUser.name || currentUser.email;
+        maybeShowNotifyBanner(); // PHASE 3
+
+        if (userRole === 'Officer') {
+            callBackend('getOfficerLocations', {email: currentUser.email}).then(locs => {
+                officerLocations = locs || [];
+                setupTabs();
+                setTimeout(() => loadMyVacancies(), 500);
+                setTimeout(() => refreshPendingBanner(), 800);
+            });
+        } else {
+            setupTabs();
+            setTimeout(() => loadStaffShifts(), 500);
+        }
+    }
+
+    function setupTabs() {
+        const tabsContainer = document.getElementById('tabsContainer');
+        const tabsContent = document.getElementById('tabsContent');
+
+        tabsContainer.innerHTML = '';
+        tabsContent.innerHTML = '';
+
+        if (userRole === 'Officer') {
+            tabsContainer.innerHTML = `
+                <button class="tab-button active" onclick="switchTab(0, this)">My Vacancies</button>
+                <button class="tab-button" onclick="switchTab(1, this)">Shift Cover Approvals</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Swaps</button>
+                <button class="tab-button" onclick="switchTab(3, this)">Settings</button>
+            `;
+            tabsContent.innerHTML = `
+                <div id="tab-0" class="tab-content active">
+                    <h3>My Vacancies</h3>
+                    <button class="btn-primary" onclick="addVacancyRow()">+ Add Shift</button>
+                    <button class="btn-primary" onclick="saveVacancies()" style="margin-left: 10px;">Save Changes</button>
+                    <div id="vacanciesContainer"></div>
+                </div>
+                <div id="tab-1" class="tab-content"><h3>Shift Cover Approvals</h3><div id="approvalsContainer"></div></div>
+                <div id="tab-2" class="tab-content"><h3>Pending Swaps</h3><div id="swapsContainer"></div></div>
+                <div id="tab-3" class="tab-content"><h3>Settings</h3><div id="officerSettingsContainer"></div></div>
+            `;
+        } else {
+            tabsContainer.innerHTML = `
+                <button class="tab-button active" onclick="switchTab(0, this)">Available Shifts</button>
+                <button class="tab-button" onclick="switchTab(1, this)">Shift Swaps</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
+            `;
+            tabsContent.innerHTML = `
+                <div id="tab-0" class="tab-content active">
+                    <h3>Available Shifts</h3>
+                    <button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button>
+                    <div id="shiftsContainer"></div>
+                </div>
+                <div id="tab-1" class="tab-content">
+                    <h3>Shift Swaps</h3>
+                    <h4>Current Shifts Up for Swap (Approved)</h4>
+                    <div id="currentSwapsContainer"></div>
+                    <h4 style="margin-top: 30px;">List a New Shift for Swap</h4>
+                    <div class="form-group"><label>Date</label><input type="date" id="swapDate" /></div>
+                    <div class="form-group"><label>Location</label><select id="swapLocation" onchange="updateSwapJobTypes()"><option value="">Select Location</option></select></div>
+                    <div class="form-group"><label>Job Type</label><select id="swapJobType"><option value="">Select Job Type</option></select></div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;"><input type="checkbox" id="swapIsServiceDisruption" /><label for="swapIsServiceDisruption" style="margin-bottom: 0;">Service-disruption shift</label></div>
+                    <button class="btn-primary" onclick="openFortnightModal()">Select Available Days</button>
+                    <div id="swapSelectedDays" style="display:none; margin-top:12px; background:#f0f9ff; border:1px solid #bee5eb; border-radius:4px; padding:10px 14px; font-size:13px; color:#0c5460;">
+                        <strong>Can work in exchange:</strong>
+                        <div id="swapSelectedDaysText" style="margin-top:4px;"></div>
+                    </div>
+                    <button id="offerSwapBtn" class="btn-success" style="margin-top:16px; opacity:0.4; cursor:not-allowed;" disabled onclick="offerShiftForSwap()">Offer Shift for Swap</button>
+                </div>
+                <div id="tab-2" class="tab-content">
+                    <h3>Settings</h3>
+                    <div class="settings-section">
+                        <h4>Work Location Preferences</h4>
+                        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+                            <thead>
+                                <tr>
+                                    <th style="width:40px;text-align:center;padding:6px 4px;font-size:13px;font-weight:600;color:#2c6e6a;">Primary Workplace</th>
+                                    <th style="text-align:center;padding:6px 8px;font-size:13px;font-weight:600;color:#333;"></th>
+                                    <th style="width:40px;text-align:center;padding:6px 4px;font-size:13px;font-weight:600;color:#2c6e6a;">Cover</th>
+                                </tr>
+                                <tr>
+                                    <td></td>
+                                    <td></td>
+                                    <td style="text-align:center;padding:2px 4px 8px;font-size:11px;color:#666;">Extra shifts</td>
+                                </tr>
+                            </thead>
+                            <tbody id="locationTableBody"></tbody>
+                        </table>
+                    </div>
+                    <!-- PHASE 3: device-local availability blackouts -->
+                    <div class="settings-section">
+                        <h4>My Availability (this device)</h4>
+                        <div id="availabilityContainer"><p style="color:#999;font-size:13px;">Loading...</p></div>
+                    </div>
+                    <div class="settings-section">
+                        <h4>AST Qualifications</h4>
+                        <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Select your AST qualifications below.</p>
+                        <div id="astList"></div>
+                    </div>
+                    <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                </div>
+            `;
+            populateSwapLocations();
+            loadLocationCheckboxes();
+            loadASTCheckboxes();
+            loadAvailabilitySection(); // PHASE 3
+        }
+    }
+
+    function switchTab(idx, btn) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+        document.getElementById('tab-' + idx).classList.add('active');
+        btn.classList.add('active');
+
+        if (userRole === 'Officer') {
+            if (idx === 0) loadMyVacancies();
+            if (idx === 1) loadOfficerApprovals();
+            if (idx === 2) loadPendingSwaps();
+            if (idx === 3) loadOfficerSettings();
+        } else {
+            if (idx === 0) loadStaffShifts();
+            if (idx === 1) loadCurrentSwaps();
+        }
+    }
+
+    // ============================================================
+    // VACANCIES (OFFICER)
+    // ============================================================
+
+    function loadMyVacancies() {
+        showMessage('Loading vacancies...', 'info');
+        callBackend('getOfficerVacancies', {email: currentUser.email}).then(vacancies => {
+            renderVacancies(Array.isArray(vacancies) ? vacancies : []);
+        });
+    }
+
+    function renderVacancies(vacancies) {
+        const container = document.getElementById('vacanciesContainer');
+
+        if (!vacancies || vacancies.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No vacancies yet</p>';
+            return;
+        }
+
+        let html = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr>';
+        vacancies.forEach((vac) => {
+            let dateString = '';
+            if (vac.date && vac.date.includes('/')) {
+                const parts = vac.date.split('/');
+                if (parts.length === 3) {
+                    dateString = parts[2] + '-' + String(parts[1]).padStart(2, '0') + '-' + String(parts[0]).padStart(2, '0');
+                }
+            }
+            html += `<tr>
+                <td><input type="date" class="vac-date" value="${dateString}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
+                <td style="padding: 12px;">${vac.location}<input type="hidden" class="vac-location" value="${vac.location}"></td>
+                <td><input type="text" class="vac-jobtype" value="${vac.jobType}" disabled style="background: #f9f9f9; cursor: not-allowed;" /></td>
+                <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
+
+    function addVacancyRow() {
+        const container = document.getElementById('vacanciesContainer');
+        let table = container.querySelector('table');
+
+        if (!table) {
+            container.innerHTML = '<table><tr><th>Date</th><th>Location</th><th>Job Type</th><th>Action</th></tr></table>';
+            table = container.querySelector('table');
+        }
+
+        const newRow = table.insertRow(1); // Insert after header — appears at top
+        let locHtml = '<select class="vac-location" onchange="updateNewRowJobTypes(this)" style="width: 100%; padding: 6px;"><option value="">Select Location</option>';
+        officerLocations.forEach(loc => {
+            locHtml += `<option value="${loc}">${loc}</option>`;
+        });
+        locHtml += '</select>';
+
+        newRow.innerHTML = `
+            <td><input type="date" class="vac-date" style="width: 100%; padding: 6px; border: 1px solid #ddd;"></td>
+            <td>${locHtml}</td>
+            <td><select class="vac-jobtype" style="width: 100%; padding: 6px;"><option value="">Select Job Type</option></select></td>
+            <td><button class="btn-secondary" onclick="removeVacancyRow(this)" style="padding: 4px 8px; font-size: 12px;">Remove</button></td>`;
+    }
+
+    function updateNewRowJobTypes(select) {
+        const location = select.value;
+        const row = select.closest('tr');
+        const jobTypeSelect = row.querySelector('.vac-jobtype');
+        jobTypeSelect.innerHTML = '<option value="">Loading...</option>';
+        if (!location) { jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>'; return; }
+        callBackend('getJobTypesForLocation', { location }).then(result => {
+            jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+            if (result.jobTypes) result.jobTypes.forEach(jt => {
+                jobTypeSelect.innerHTML += '<option value="' + jt + '">' + jt + '</option>';
+            });
+        }).catch(() => { jobTypeSelect.innerHTML = '<option value="">Error loading</option>'; });
+    }
+
+    function removeVacancyRow(btn) {
+        btn.parentElement.parentElement.remove();
+    }
+
+    function saveVacancies() {
+        const rows = document.querySelectorAll('#vacanciesContainer table tr');
+        const vacancies = [];
+
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i];
+            const dateInput = row.querySelector('.vac-date');
+            const jobtypeEl = row.querySelector('.vac-jobtype');
+
+            if (!dateInput || !jobtypeEl) continue;
+
+            let date = dateInput.value;
+            const jobType = jobtypeEl.value;
+            const locationEl = row.querySelector('.vac-location');
+            let location = locationEl ? locationEl.value.trim() : '';
+
+            if (date && date.includes('-')) {
+                const [year, month, day] = date.split('-');
+                date = day + '/' + month + '/' + year;
+            }
+
+            if (date && jobType && location) {
+                vacancies.push({ date, jobType, location });
+            }
+        }
+
+        if (vacancies.length === 0) {
+            showMessage('No valid vacancies to save', 'error');
+            return;
+        }
+
+        showMessage('Saving vacancies...', 'info');
+        callBackend('saveOfficerVacancies', {
+            email: currentUser.email,
+            vacancies: vacancies
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('\u2713 Vacancies saved', 'success'); loadMyVacancies(); }
+        });
+    }
+
+    // ============================================================
+    // APPROVALS (OFFICER)
+    // ============================================================
+
+    function loadOfficerApprovals() {
+        showMessage('Loading approvals...', 'info');
+        Promise.all([
+            callBackend('getOfficerPendingApprovals', {email: currentUser.email}),
+            callBackend('getOfficerPastApprovals', {email: currentUser.email})
+        ]).then(([pending, past]) => {
+            renderApprovals(
+                Array.isArray(pending) ? pending : [],
+                Array.isArray(past) ? past : []
+            );
+            refreshPendingBanner();
+        });
+    }
+
+    function renderApprovals(pending, past) {
+        const container = document.getElementById('approvalsContainer');
+        if (!container) {
+            console.error('approvalsContainer not found in DOM');
+            return;
+        }
+        let html = '';
+        try {
+
+        if (pending.length === 0) {
+            html += '<h4>Outstanding Cover Requests</h4><p style="color: #999;">No outstanding requests</p>';
+        } else {
+            html += '<h4>Outstanding Cover Requests</h4>';
+            const grouped = {};
+            pending.forEach(claim => {
+                const key = claim.date + '|' + claim.jobType + '|' + claim.location;
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(claim);
+            });
+
+            for (let key in grouped) {
+                const claimList = grouped[key];
+                const first = claimList[0];
+                html += `<div class="shift-item">
+                    <div class="shift-item-header">
+                        <strong>${first.date} - ${first.jobType} @ ${first.location}</strong>
+                    </div>`;
+
+                let claimIdx = 0;
+                claimList.forEach((claim) => {
+                    const isProposal = claim.type === 'swap_proposal';
+                    const isSwap = claim.type === 'swap_claim';
+                    const isBackupApp = !isProposal && !isSwap && claim.requestStatus && claim.requestStatus.toUpperCase() === 'BACKUP';
+                    const isReoffered = !isProposal && !isSwap && claim.requestStatus && claim.requestStatus.toUpperCase() === 'RE-OFFERED';
+                    const typeBadge = isProposal
+                        ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP PROPOSAL</span>`
+                        : isSwap
+                        ? `<span style="background: #d4edda; color: #155724; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SWAP CLAIM</span>`
+                        : isReoffered
+                        ? `<span style="background: #fff3cd; color: #856404; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">RE-OFFERED</span>`
+                        : isBackupApp
+                        ? `<span style="background: #f8d7da; color: #721c24; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">BACKUP</span>`
+                        : `<span style="background: #cfe2ff; color: #084298; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">SHIFT REQUEST</span>`;
+
+                    const proposalDetail = isProposal && claim.offeredDate
+                        ? `<br><span style="color: #666; font-size: 12px;">Offers in return: <strong>${claim.offeredDate} - ${claim.offeredJobType} @ ${claim.location}</strong></span>`
+                        : '';
+
+                    // Route approve/deny to correct backend action based on claim type
+                    const notifyId = `notify-${key.replace(/[|@. ]/g, '-')}-${claimIdx}`;
+
+                    const approveBtn = isProposal
+                        ? `<button class="btn-success" onclick="approveSwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${claim.offeredDate || ''}', '${claim.offeredJobType || ''}', '${notifyId}')">Approve</button>`
+                        : claim.type === 'shift_request'
+                        ? `<button class="btn-success" onclick="approveShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Approve</button>`
+                        : `<button class="btn-success" onclick="approveSwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Approve</button>`;
+
+                    const denyBtn = isProposal
+                        ? `<button class="btn-danger" onclick="denySwapProposalCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`
+                        : claim.type === 'shift_request'
+                        ? `<button class="btn-danger" onclick="denyShiftRequestCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`
+                        : `<button class="btn-danger" onclick="denySwapCall('${claim.claimingEmail}', '${claim.claimingName}', '${claim.originalEmail || ''}', '${claim.originalName || ''}', '${claim.date}', '${claim.jobType}', '${claim.location}', '${notifyId}')">Deny</button>`;
+                    html += `<div class="applicant-row">
+                        <div class="applicant-info">
+                            <strong>${claim.claimingName}</strong> ${typeBadge}<br>
+                            <span style="color: #666; font-size: 12px;">Submitted: ${claim.claimedTimestamp}</span>
+                            ${proposalDetail}
+                        </div>
+                        <div class="applicant-buttons" style="flex-direction: column; align-items: flex-end; gap: 8px;">
+                            <label style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="${notifyId}" checked style="width: 14px; height: 14px;">
+                                Send notification to staff
+                            </label>
+                            <div style="display: flex; gap: 8px;">
+                                ${approveBtn}
+                                ${denyBtn}
+                            </div>
+                        </div>
+                    </div>`;
+                    claimIdx++;
+                });
+                html += '</div>';
+            }
+        }
+
+        // Cache past for re-sorting, then render
+        pastApprovalsCache = past;
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+            <h4 style="margin:0;">Past Cover Requests</h4>
+            <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:#666;">
+                <span>Sort by:</span>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="pastSort" value="resolved" checked onchange="renderPastSection(this.value)"> Date resolved
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="pastSort" value="shift" onchange="renderPastSection(this.value)"> Shift date
+                </label>
+            </div>
+        </div>
+        <div id="pastApprovalsContainer"></div>`;
+
+            container.innerHTML = html;
+            // Render past section with default sort
+            renderPastSection('resolved');
+        } catch(err) {
+            console.error('renderApprovals error:', err);
+            container.innerHTML = '<p style="color: #dc3545; font-weight: bold;">Display error: ' + err.message + '</p>';
+        }
+    }
+
+
+
+    function parsePastDate(dateStr) {
+        // Parses DD/MM/YYYY or DD/MM/YYYY, HH:MM am/pm
+        if (!dateStr || dateStr === '—') return new Date(0);
+        const datePart = dateStr.split(',')[0].trim();
+        const parts = datePart.split('/');
+        if (parts.length !== 3) return new Date(0);
+        return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+    }
+
+    function renderPastSection(sortBy) {
+        const container = document.getElementById('pastApprovalsContainer');
+        if (!container) return;
+        if (pastApprovalsCache.length === 0) {
+            container.innerHTML = '<p style="color:#999;">No resolved requests</p>';
+            return;
+        }
+        const sorted = [...pastApprovalsCache].sort((a, b) => {
+            if (sortBy === 'shift') {
+                return parsePastDate(a.date) - parsePastDate(b.date);
+            } else {
+                return parsePastDate(a.resolvedDate) - parsePastDate(b.resolvedDate);
+            }
+        });
+        let html = '';
+        sorted.forEach(item => {
+            const autoDenied = item.autoDenied || [];
+            html += `<div style="background:white;border:1px solid #e0e0e0;border-radius:6px;padding:16px;margin-bottom:12px;">
+                <div style="font-weight:600;margin-bottom:8px;">${item.date} - ${item.jobType} @ ${item.location}</div>
+                <div style="font-size:13px;color:#666;margin-bottom:4px;">Resolved: ${item.resolvedDate || '—'}</div>`;
+            if (item.approved) {
+                html += `<div style="margin-top:8px;"><span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">APPROVED</span> <a href="mailto:${item.approved.email}" style="margin-left:6px;font-size:13px;">${item.approved.name}</a></div>`;
+            }
+            if (item.denied && item.denied.length > 0) {
+                html += `<div style="margin-top:6px;font-size:13px;color:#666;">Denied: ${item.denied.map(d => `<a href="mailto:${d.email}">${d.name}</a>`).join(', ')}</div>`;
+            }
+            if (autoDenied.length > 0) {
+                html += `<div style="margin-top:10px;border-top:1px solid #f0f0f0;padding-top:10px;">
+                    <div style="font-size:12px;font-weight:600;color:#856404;margin-bottom:6px;">Auto-denied applicants — eligible for re-offer if approved person withdraws:</div>`;
+                autoDenied.forEach(ad => {
+                    html += `<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                        <span style="font-size:13px;flex:1;">${ad.name}</span>
+                        <button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="reofferShiftCall('${ad.email}','${ad.name}','${item.date}','${item.jobType}','${item.location}')">Re-offer</button>
+                    </div>`;
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+        container.innerHTML = html;
+    }
+
+
+    function renderPastSwapSection(sortBy) {
+        const container = document.getElementById('pastSwapProposalsContainer');
+        if (!container) return;
+        if (!pastSwapProposalsCache || pastSwapProposalsCache.length === 0) {
+            container.innerHTML = '<p style="color:#999;">No resolved swap proposals</p>';
+            return;
+        }
+        const sorted = [...pastSwapProposalsCache].sort((a, b) => {
+            if (sortBy === 'shift') return parsePastDate(a.date) - parsePastDate(b.date);
+            return parsePastDate(a.resolvedTimestamp) - parsePastDate(b.resolvedTimestamp);
+        });
+        let html = '<table><tr><th>Resolved</th><th>Proposed By</th><th>Shift Taken</th><th>In Return</th><th>Status</th></tr>';
+        sorted.forEach(p => {
+            const statusBadge = p.status === 'APPROVED'
+                ? `<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">Approved</span>`
+                : `<span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:600;">Denied</span>`;
+            html += `<tr>
+                <td style="font-size:13px;white-space:nowrap;">${p.resolvedTimestamp}</td>
+                <td style="font-size:13px;">${p.claimingName}</td>
+                <td style="font-size:13px;">${p.date} - ${p.jobType} @ ${p.location}<br><span style="color:#666;font-size:12px;">from ${p.originalName}</span></td>
+                <td style="font-size:13px;">${p.offeredDate} - ${p.offeredJobType}</td>
+                <td>${statusBadge}</td>
+            </tr>`;
+        });
+        html += '</table>';
+        container.innerHTML = html;
+    }
+
+    function reofferShiftCall(staffEmail, staffName, date, jobType, location) {
+        showMessage('Sending re-offer email...', 'info');
+        callBackend('reofferShift', {
+            officerEmail: currentUser.email,
+            officerName: currentUser.name,
+            staffEmail, staffName, date, jobType, location
+        }).then(result => {
+            if (result.error) {
+                showMessage('Error: ' + result.error, 'error');
+            } else {
+                showMessage('\u2713 Re-offer sent to ' + staffName + ' \u2014 request moved to Outstanding Cover Requests', 'success');
+                loadOfficerApprovals(); // Refreshes both Outstanding and Past sections
+            }
+        });
+    }
+
+    function approveSwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Approving...', 'info');
+        callBackend('approveSwap', {
+            claimingEmail, claimingName, originalEmail, originalName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location, sendEmail
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Approved and auto-denied other applicants', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    function approveShiftRequestCall(email, name, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Approving shift request...', 'info');
+        callBackend('approveShiftRequest', {
+            email, name, date, jobType, location, sendEmail
+        }).then(result => {
+            if (result.error) {
+                showMessage(result.error, 'error');
+            } else {
+                const denied = result.autoDenied || 0;
+                showMessage(`✓ Shift request approved${denied > 0 ? ' — ' + denied + ' backup applicant(s) auto-denied' : ''}`, 'success');
+                // Small delay to allow Google Sheets writes to propagate before re-read
+                setTimeout(() => { loadOfficerApprovals(); refreshPendingBanner(); }, 800);
+            }
+        });
+    }
+
+    function denyShiftRequestCall(email, name, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Denying shift request...', 'info');
+        callBackend('denyShiftRequest', {
+            email, name, date, jobType, location, sendEmail
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Shift request denied', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+        function denySwapCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Denying...', 'info');
+        callBackend('denySwap', {
+            claimingEmail, claimingName, originalEmail, originalName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location, sendEmail
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Denied', 'success'); loadOfficerApprovals(); }
+        });
+    }
+
+    // ============================================================
+    // PENDING SWAPS (OFFICER)
+    // ============================================================
+
+    function loadPendingSwaps() {
+        showMessage('Loading swaps...', 'info');
+        Promise.all([
+            callBackend('getOfficerMarketplaceListings', {email: currentUser.email}),
+            callBackend('getOfficerApprovedListings', {email: currentUser.email}),
+            callBackend('getOfficerSwapProposals', {email: currentUser.email}),
+            callBackend('getOfficerPastSwapProposals', {email: currentUser.email})
+        ]).then(([pending, approved, proposals, pastProposals]) => {
+            renderSwapsTab(pending || [], approved || [], proposals || [], pastProposals || []);
+            refreshPendingBanner();
+        });
+    }
+
+    function renderSwapsTab(pending, approved, proposals, pastProposals) {
+        const container = document.getElementById('swapsContainer');
+        let html = '';
+
+        // ── Section 1: Pending Swaps ──────────────────────────────
+        html += '<h4 style="margin-bottom: 12px;">Pending Swaps</h4>';
+        if (!pending || pending.length === 0) {
+            html += '<p style="color: #999; margin-bottom: 24px;">No shifts awaiting marketplace approval</p>';
+        } else {
+            pending.forEach(listing => {
+                const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
+                const borderColor = listing.isServiceDisruption ? '#dc3545' : '#000';
+                const pendingAvailableText = listing.availableDays
+                    ? `<div style="color: #666; font-size: 12px; margin-top: 4px; margin-bottom: 10px;"><strong>Can work:</strong> ${formatAvailableDays(listing.date, listing.availableDays)}</div>`
+                    : '';
+                html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                        <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
+                        ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold; font-size: 12px;">SERVICE-DISRUPTION</span>' : ''}
+                    </div>
+                    <div style="color: #666; font-size: 13px;">Offered by: ${listing.originalName}</div>
+                    ${pendingAvailableText}
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approvePendingSwap('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Approve to Marketplace</button>
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenySwapModal('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Deny</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // ── Section 2: Approved to Marketplace ───────────────────
+        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Approved to Marketplace</h4>';
+        if (!approved || approved.length === 0) {
+            html += '<p style="color: #999; margin-bottom: 24px;">No shifts currently live on the marketplace</p>';
+        } else {
+            approved.forEach(listing => {
+                const availableDaysText = listing.availableDays
+                    ? `<div style="color: #666; font-size: 12px; margin-top: 4px;"><strong>Can work:</strong> ${formatAvailableDays(listing.date, listing.availableDays)}</div>`
+                    : '';
+                const color = listing.isServiceDisruption ? '#ffe6e6' : '#f9f9f9';
+                const borderColor = listing.isServiceDisruption ? '#dc3545' : '#28a745';
+                html += `<div style="background: ${color}; border-left: 4px solid ${borderColor}; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+                                <strong>${listing.date} - ${listing.jobType} @ ${listing.location}</strong>
+                                ${listing.isServiceDisruption ? '<span style="color: #dc3545; font-weight: bold; font-size: 12px;">SERVICE-DISRUPTION</span>' : ''}
+                            </div>
+                            <div style="color: #666; font-size: 13px;">Offered by: ${listing.originalName}</div>
+                            ${availableDaysText}
+                        </div>
+                        <button class="btn-secondary" style="padding: 6px 12px; font-size: 12px; white-space: nowrap; margin-left: 15px;" onclick="pullBackFromMarketplace('${listing.originalEmail}', '${listing.originalName}', '${listing.date}', '${listing.jobType}', '${listing.location}')">Pull Back</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // ── Section 3: Swap Proposals ─────────────────────────────
+        html += '<h4 style="margin-top: 28px; margin-bottom: 12px;">Swap Proposals</h4>';
+        if (!proposals || proposals.length === 0) {
+            html += '<p style="color: #999;">No pending swap proposals</p>';
+        } else {
+            proposals.forEach(proposal => {
+                html += `<div style="background: #fff8e1; border-left: 4px solid #f9a825; padding: 15px; margin-bottom: 12px; border-radius: 4px;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>${proposal.claimingName}</strong> <span style=\"color: #856404; font-size: 12px;\">${proposal.claimingAst || ''}</span> proposes to take:
+                        <strong> ${proposal.date} - ${proposal.jobType} @ ${proposal.location}</strong>
+                        <span style="color: #666; font-size: 13px;"> (from ${proposal.originalName} <span style=\"font-size: 12px;\">${proposal.originalAst || ''}</span>)</span>
+                    </div>
+                    <div style="color: #555; font-size: 13px; margin-bottom: 10px;">
+                        In return, <strong>${proposal.originalName}</strong> <span style=\"font-size: 12px;\">${proposal.originalAst || ''}</span> would work:
+                        <strong>${proposal.offeredDate} - ${proposal.offeredJobType} @ ${proposal.location}</strong>
+                    </div>
+                    <div style="color: #999; font-size: 12px; margin-bottom: 10px;">Submitted: ${proposal.timestamp}</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn-success" style="padding: 6px 12px; font-size: 12px;" onclick="approveSwapProposalCall('${proposal.claimingEmail}', '${proposal.claimingName}', '${proposal.originalEmail}', '${proposal.originalName}', '${proposal.date}', '${proposal.jobType}', '${proposal.location}', '${proposal.offeredDate}', '${proposal.offeredJobType}')">Approve</button>
+                        <button class="btn-danger" style="padding: 6px 12px; font-size: 12px;" onclick="openDenyProposalModal('${proposal.claimingEmail}', '${proposal.claimingName}', '${proposal.date}', '${proposal.jobType}', '${proposal.location}')">Deny</button>
+                    </div>
+                </div>`;
+            });
+        }
+
+
+        // ── Section 4: Past Swap Proposals ───────────────────
+        pastSwapProposalsCache = pastProposals || [];
+        html += `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:28px;margin-bottom:12px;">
+            <h4 style="margin:0;">Past Swap Proposals</h4>
+            <div style="display:flex;align-items:center;gap:16px;font-size:13px;color:#666;">
+                <span>Sort by:</span>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="swapSort" value="resolved" checked onchange="renderPastSwapSection(this.value)"> Date resolved
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                    <input type="radio" name="swapSort" value="shift" onchange="renderPastSwapSection(this.value)"> Shift date
+                </label>
+            </div>
+        </div>
+        <div id="pastSwapProposalsContainer"></div>`;
+
+        container.innerHTML = html;
+        renderPastSwapSection('resolved');
+    }
+
+    function pullBackFromMarketplace(email, name, date, jobType, location) {
+        showMessage('Pulling back from marketplace...', 'info');
+        callBackend('removeFromMarketplace', {
+            staffEmail: email, staffName: name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Listing pulled back and staff notified', 'success'); loadPendingSwaps(); }
+        });
+    }
+
+    function openDenyProposalModal(claimingEmail, claimingName, date, jobType, location) {
+        pendingDenyProposal = { claimingEmail, claimingName, date, jobType, location };
+        pendingDenySwap = null;
+        document.getElementById('denySwapModal').classList.add('active');
+        document.getElementById('denyReason').value = '';
+    }
+
+    function approvePendingSwap(email, name, date, jobType, location) {
+        showMessage('Approving pending swap for marketplace...', 'info');
+        callBackend('approvePendingSwap', {
+            staffEmail: email, staffName: name, date, jobType, location
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap approved and moved to marketplace', 'success'); loadPendingSwaps(); }
+        });
+    }
+
+    function openDenySwapModal(email, name, date, jobType, location) {
+        pendingDenySwap = { email, name, date, jobType, location };
+        document.getElementById('denySwapModal').classList.add('active');
+        document.getElementById('denyReason').value = '';
+    }
+
+    function closeDenyModal() {
+        document.getElementById('denySwapModal').classList.remove('active');
+        pendingDenySwap = null;
+        pendingDenyProposal = null;
+    }
+
+    function submitDenySwap() {
+        const reason = document.getElementById('denyReason').value.trim();
+        if (!reason) { showMessage('Please provide a reason', 'error'); return; }
+
+        // Proposal denial
+        if (pendingDenyProposal) {
+            showMessage('Denying swap proposal...', 'info');
+            callBackend('denySwapProposalWithReason', {
+                claimingEmail: pendingDenyProposal.claimingEmail,
+                claimingName: pendingDenyProposal.claimingName,
+                date: pendingDenyProposal.date,
+                jobType: pendingDenyProposal.jobType,
+                location: pendingDenyProposal.location,
+                reason
+            }).then(result => {
+                if (result.error) showMessage(result.error, 'error');
+                else { showMessage('✓ Proposal denied and email sent', 'success'); closeDenyModal(); loadPendingSwaps(); }
+            });
+            return;
+        }
+
+        // Listing denial
+        if (!pendingDenySwap) return;
+        showMessage('Denying swap...', 'info');
+        callBackend('denySwapWithReason', {
+            staffEmail: pendingDenySwap.email, staffName: pendingDenySwap.name,
+            date: pendingDenySwap.date, jobType: pendingDenySwap.jobType,
+            location: pendingDenySwap.location, reason
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap denied and email sent', 'success'); closeDenyModal(); loadPendingSwaps(); }
+        });
+    }
+
+    // ============================================================
+    // SHIFTS (STAFF)
+    // ============================================================
+
+// PHASE 3: blackout-aware versions of loadStaffShifts/renderAllShifts
+    function loadStaffShifts() {
+        showMessage('Loading shifts...', 'info');
+        Promise.all([
+            callBackend('getStaffAvailableShifts', {email: currentUser.email}),
+            getBlackoutDates(),
+            getBlackoutDisplayMode()
+        ]).then(([shifts, blackouts, mode]) => {
+            renderAllShifts(shifts || [], new Set(blackouts), mode);
+        });
+    }
+
+    function renderAllShifts(shifts, blackoutSet, blackoutMode) {
+        blackoutSet = blackoutSet || new Set();
+        blackoutMode = blackoutMode || 'grey';
+        const container = document.getElementById('shiftsContainer');
+
+        const visible = shifts.filter(s => !(blackoutMode === 'hide' && blackoutSet.has(toISODate(s.date))));
+        const hiddenCount = shifts.length - visible.length;
+
+        if (!visible || visible.length === 0) {
+            container.innerHTML = hiddenCount > 0
+                ? `<p style="color: #999;">No shifts available (${hiddenCount} hidden on your unavailable dates \u2014 see Settings)</p>`
+                : '<p style="color: #999;">No shifts available</p>';
+            return;
+        }
+
+        let html = '';
+        visible.forEach((shift, idx) => {
+            const pending = shift.hasPendingApplicants;
+            const blackedOut = blackoutSet.has(toISODate(shift.date));
+            const dim = pending || blackedOut;
+            html += `<div class="shift-item" style="${dim ? 'opacity:0.7;' : ''}">
+                <div class="shift-item-header">
+                    <input type="checkbox" class="shift-checkbox" value="${idx}" data-pending="${pending ? 'true' : 'false'}" style="margin-right: 10px;">
+                    <label style="margin-bottom: 0; flex: 1; ${dim ? 'color:#999;' : ''}">
+                        <strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong>
+                        ${pending ? '<span style="font-size:11px;color:#aaa;margin-left:6px;">(application pending approval)</span>' : ''}
+                        ${blackedOut ? '<span style="font-size:11px;color:#c0392b;margin-left:6px;">(you marked this date unavailable)</span>' : ''}
+                    </label>
+                </div>
+            </div>`;
+        });
+        if (hiddenCount > 0) {
+            html += `<p style="color:#999;font-size:12px;margin-top:8px;">${hiddenCount} shift(s) hidden on your unavailable dates \u2014 manage in Settings.</p>`;
+        }
+        container.innerHTML = html;
+    }
+
+    let pendingBackupRequest = null; // Stores shift list while backup modal is open
+    let pastApprovalsCache = []; // Cache for re-sorting without backend call
+    let pastSwapProposalsCache = []; // Cache for re-sorting swap proposals
+
+    function requestShifts() {
+        const checkboxes = Array.from(document.querySelectorAll('.shift-checkbox:checked'));
+        if (checkboxes.length === 0) { showMessage('Please select at least one shift', 'error'); return; }
+
+        const allShifts = checkboxes.map(cb => {
+            const item = cb.parentElement.parentElement;
+            const text = item.querySelector('label strong').textContent;
+            const parts = text.split(' - ');
+            const date = parts[0].trim();
+            const rest = parts.slice(1).join(' - ');
+            const atIdx = rest.lastIndexOf(' @ ');
+            const jobType = rest.substring(0, atIdx).trim();
+            const location = rest.substring(atIdx + 3).trim();
+            return { date, jobType, location, isPending: cb.getAttribute('data-pending') === 'true' };
+        });
+
+        const pendingShifts = allShifts.filter(s => s.isPending);
+        const normalShifts = allShifts.filter(s => !s.isPending);
+
+        if (pendingShifts.length > 0) {
+            // Show backup confirmation modal
+            pendingBackupRequest = { allShifts, normalShifts, pendingShifts, checkboxes };
+            const listEl = document.getElementById('backupShiftList');
+            listEl.innerHTML = pendingShifts.map(s =>
+                `<div style="background:#fff8e1;border-left:3px solid #E6A817;padding:8px 12px;margin-bottom:6px;border-radius:3px;font-size:13px;">
+                    <strong>${s.date} - ${s.jobType} @ ${s.location}</strong>
+                </div>`
+            ).join('');
+            document.getElementById('backupConfirmModal').classList.add('active');
+        } else {
+            submitShiftRequests(allShifts, checkboxes);
+        }
+    }
+
+    function confirmBackupRequest(includeBackup) {
+        document.getElementById('backupConfirmModal').classList.remove('active');
+        if (!pendingBackupRequest) return;
+        const { allShifts, normalShifts, pendingShifts, checkboxes } = pendingBackupRequest;
+        pendingBackupRequest = null;
+
+        if (!includeBackup) {
+            // Uncheck the greyed (pending) shift checkboxes since user skipped them
+            checkboxes.forEach(cb => {
+                if (cb.getAttribute('data-pending') === 'true') cb.checked = false;
+            });
+        }
+
+        const shiftsToSubmit = includeBackup ? allShifts : normalShifts;
+        if (shiftsToSubmit.length === 0) {
+            showMessage('No shifts submitted.', 'info');
+            return;
+        }
+        submitShiftRequests(shiftsToSubmit.map(s => ({ date: s.date, jobType: s.jobType, location: s.location })), checkboxes);
+    }
+
+    function submitShiftRequests(shifts, checkboxes) {
+        showMessage('Sending shift requests...', 'info');
+        callBackend('requestShifts', {
+            email: currentUser.email,
+            name: currentUser.name,
+            shifts
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else {
+                showMessage('\u2713 Shift requests sent!', 'success');
+                checkboxes.forEach(cb => cb.checked = false);
+                loadStaffShifts(); // Refresh to update pending flags
+            }
+        });
+    }
+
+    // ============================================================
+    // SWAPS (STAFF)
+    // ============================================================
+
+    function loadCurrentSwaps() {
+        callBackend('getMarketplaceListings', {email: currentUser.email}).then(swaps => {
+            const container = document.getElementById('currentSwapsContainer');
+            if (!swaps || swaps.length === 0) {
+                container.innerHTML = '<p style="color: #999;">No approved swaps available (awaiting officer approval of your swap offers)</p>';
+            } else {
+                let html = '';
+                swaps.forEach(s => {
+                    const availableDaysText = s.availableDays ? `<div style="color: #666; font-size: 12px; margin-top: 5px;"><strong>Can work:</strong> ${formatAvailableDays(s.date, s.availableDays)}</div>` : '';
+                    html += `<div class="shift-item">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                            <div>
+                                <div><strong>${s.date} - ${s.jobType} @ ${s.location}</strong></div>
+                                <div style="color: #666; font-size: 13px;">Offered by: ${s.originalName}</div>
+                                ${availableDaysText}
+                            </div>
+                            <button class="btn-primary" style="margin-left: 15px; white-space: nowrap; font-size: 12px; padding: 6px 12px;" onclick='openProposalModal(${JSON.stringify(s)})'>Propose Swap</button>
+                        </div>
+                    </div>`;
+                });
+                container.innerHTML = html;
+            }
+        });
+    }
+
+    function populateSwapLocations() {
+        const select = document.getElementById('swapLocation');
+        if (!select) return;
+        select.innerHTML = '<option value="">Select Location</option>';
+        const swapLocs = userPrimaryLocations.length > 0 ? userPrimaryLocations : [];
+        if (swapLocs.length === 0) {
+            select.innerHTML = '<option value="">Set a primary workplace in Settings first</option>';
+            return;
+        }
+        swapLocs.forEach(loc => {
+            const opt = document.createElement('option');
+            opt.value = loc;
+            opt.textContent = loc;
+            select.appendChild(opt);
+        });
+    }
+
+    function updateSwapJobTypes() {
+        const location = document.getElementById('swapLocation').value;
+        const jobTypeSelect = document.getElementById('swapJobType');
+        if (!location) { jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>'; return; }
+        jobTypeSelect.innerHTML = '<option value="">Loading...</option>';
+        callBackend('getJobTypesForLocation', { location }).then(result => {
+            if (result.jobTypes && result.jobTypes.length > 0) {
+                jobTypeSelect.innerHTML = '<option value="">Select Job Type</option>';
+                result.jobTypes.forEach(jt => {
+                    const opt = document.createElement('option');
+                    opt.value = jt;
+                    opt.textContent = jt;
+                    jobTypeSelect.appendChild(opt);
+                });
+            } else if (result.error) {
+                jobTypeSelect.innerHTML = '<option value="">Error loading — try again</option>';
+            } else {
+                jobTypeSelect.innerHTML = '<option value="">No shift types configured for this location</option>';
+            }
+        }).catch(() => {
+            jobTypeSelect.innerHTML = '<option value="">Error loading — try again</option>';
+        });
+    }
+
+    function openFortnightModal() {
+        const date = document.getElementById('swapDate').value;
+        const location = document.getElementById('swapLocation').value;
+        const jobType = document.getElementById('swapJobType').value;
+
+        if (!date || !location || !jobType) {
+            showMessage('Please fill in Date, Location, and Job Type first', 'error');
+            return;
+        }
+
+        pendingFortnightSwap = { date, location, jobType };
+        renderFortnightGrid(date);
+        document.getElementById('fortnightModal').classList.add('active');
+    }
+
+    function renderFortnightGrid(dateStr) {
+        const container = document.getElementById('fortnightGrid');
+        const [year, month, day] = dateStr.split('-');
+        const shiftDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+        // Use QH pay fortnight anchored to 25/05/2026
+        const fortnightStart = getQHFortnightStart(shiftDate);
+
+        const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        // Build two stacked 7-column tables (one per week) — fits any phone width
+        function buildWeekTable(weekOffset, label) {
+            let t = '<div style="margin-bottom:12px;">';
+            t += '<div style="font-weight:600;font-size:12px;background:#f0f0f0;padding:4px 6px;border-radius:4px 4px 0 0;border:1px solid #ddd;">' + label + '</div>';
+            t += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+
+            // Date header
+            t += '<tr>';
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(fortnightStart);
+                d.setDate(d.getDate() + weekOffset + i);
+                t += '<td style="text-align:center;padding:4px 2px;border:1px solid #ddd;background:#f9f9f9;">' + dayNames[i] + '<br>' + d.getDate() + '/' + (d.getMonth()+1) + '</td>';
+            }
+            t += '</tr>';
+
+            // Day row
+            t += '<tr><td colspan="7" style="padding:2px 4px;font-weight:600;background:#e8f4fd;font-size:11px;border:1px solid #ddd;">Day</td></tr>';
+            t += '<tr>';
+            for (let i = 0; i < 7; i++) {
+                t += '<td style="text-align:center;padding:6px 2px;border:1px solid #ddd;"><input type="checkbox" class="fortnight-day-checkbox" value="' + (weekOffset + i) + '" style="width:18px;height:18px;cursor:pointer;"></td>';
+            }
+            t += '</tr>';
+
+            // Night row
+            t += '<tr><td colspan="7" style="padding:2px 4px;font-weight:600;background:#edf2f7;font-size:11px;border:1px solid #ddd;">Night</td></tr>';
+            t += '<tr>';
+            for (let i = 0; i < 7; i++) {
+                t += '<td style="text-align:center;padding:6px 2px;border:1px solid #ddd;"><input type="checkbox" class="fortnight-night-checkbox" value="' + (weekOffset + i) + '" style="width:18px;height:18px;cursor:pointer;"></td>';
+            }
+            t += '</tr>';
+
+            t += '</table></div>';
+            return t;
+        }
+
+        container.innerHTML = buildWeekTable(0, 'Week 1') + buildWeekTable(7, 'Week 2');
+    }
+
+    function submitFortnightSelection() {
+        const dayChecks = Array.from(document.querySelectorAll('.fortnight-day-checkbox:checked')).map(cb => 'Day-' + cb.value);
+        const nightChecks = Array.from(document.querySelectorAll('.fortnight-night-checkbox:checked')).map(cb => 'Night-' + cb.value);
+        const selectedDays = [...dayChecks, ...nightChecks];
+
+        if (selectedDays.length === 0) {
+            const err = document.getElementById('fortnightError');
+            if (err) { err.textContent = 'Please select at least one day'; err.style.display = 'block'; }
+            return;
+        }
+        const fortnightErr = document.getElementById('fortnightError');
+        if (fortnightErr) fortnightErr.style.display = 'none';
+
+        try {
+            // Store selection — actual submit happens via offerShiftForSwap
+            if (!pendingFortnightSwap) pendingFortnightSwap = {};
+            pendingFortnightSwap.availableDays = selectedDays.join(',');
+            const mc = document.getElementById('messageContainer'); if (mc) mc.innerHTML = '';
+
+            // Display selected dates below the form
+            const formatted = formatAvailableDays(pendingFortnightSwap.date, pendingFortnightSwap.availableDays);
+            const display = document.getElementById('swapSelectedDays');
+            const text = document.getElementById('swapSelectedDaysText');
+            if (display && text) { text.textContent = formatted; display.style.display = 'block'; }
+
+            // Enable the offer button
+            const offerBtn = document.getElementById('offerSwapBtn');
+            if (offerBtn) { offerBtn.disabled = false; offerBtn.style.opacity = '1'; offerBtn.style.cursor = 'pointer'; }
+
+            // Close modal directly — do NOT call closeFortnightModal() as that nulls pendingFortnightSwap
+            document.getElementById('fortnightModal').classList.remove('active');
+        } catch(err) {
+            const errEl = document.getElementById('fortnightError');
+            if (errEl) { errEl.textContent = 'Error: ' + err.message; errEl.style.display = 'block'; }
+        }
+    }
+
+    function offerShiftForSwap() {
+        if (!pendingFortnightSwap || !pendingFortnightSwap.availableDays) {
+            showMessage('Please select available days first', 'error'); return;
+        }
+        showMessage('Submitting swap offer...', 'info');
+        callBackend('listShiftForSwap', {
+            email: currentUser.email,
+            name: currentUser.name,
+            date: pendingFortnightSwap.date,
+            jobType: pendingFortnightSwap.jobType,
+            location: pendingFortnightSwap.location,
+            isServiceDisruption: document.getElementById('swapIsServiceDisruption') ? document.getElementById('swapIsServiceDisruption').checked : false,
+            availableDays: pendingFortnightSwap.availableDays
+        }).then(result => {
+            if (result.error) { showMessage(result.error, 'error'); return; }
+            showMessage('\u2713 Shift offered for swap \u2014 pending officer approval', 'success');
+            document.getElementById('swapDate').value = '';
+            document.getElementById('swapLocation').value = '';
+            document.getElementById('swapJobType').innerHTML = '<option value="">Select Job Type</option>';
+            if (document.getElementById('swapIsServiceDisruption')) document.getElementById('swapIsServiceDisruption').checked = false;
+            const display = document.getElementById('swapSelectedDays');
+            if (display) display.style.display = 'none';
+            const offerBtn = document.getElementById('offerSwapBtn');
+            if (offerBtn) { offerBtn.disabled = true; offerBtn.style.opacity = '0.4'; offerBtn.style.cursor = 'not-allowed'; }
+            pendingFortnightSwap = {};
+            loadCurrentSwaps();
+        });
+    }
+
+    function closeFortnightModal() {
+        document.getElementById('fortnightModal').classList.remove('active');
+        pendingFortnightSwap = null;
+    }
+
+    // ============================================================
+    // SETTINGS (STAFF)
+    // ============================================================
+
+    function loadLocationCheckboxes() {
+        const tbody = document.getElementById('locationTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '<tr><td colspan="3" style="color:#999;font-size:13px;padding:8px;">Loading...</td></tr>';
+
+        callBackend('getAllLocations', {}).then(locations => {
+            if (!locations || locations.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="color:#999;font-size:13px;padding:8px;">No locations found.</td></tr>';
+                return;
+            }
+            renderLocationTable(locations);
+        });
+    }
+
+    function renderLocationTable(locations) {
+        const tbody = document.getElementById('locationTableBody');
+        if (!tbody) return;
+        let html = '';
+        locations.forEach((loc, i) => {
+            const coverChecked = userLocations.includes(loc) ? ' checked' : '';
+            const primaryChecked = userPrimaryLocations.includes(loc) ? ' checked' : '';
+            // Primary radio only enabled when cover is ticked
+            const primaryDisabled = userLocations.includes(loc) ? '' : ' disabled';
+            const rowBg = i % 2 === 0 ? '' : 'background:#f9f9f9;';
+            html += `<tr style="${rowBg}">
+                <td style="text-align:center;padding:8px 4px;">
+                    <input type="radio" name="primaryLoc" id="primary-${loc}" value="${loc}"${primaryChecked}${primaryDisabled}>
+                </td>
+                <td style="padding:8px;font-size:14px;text-align:center;">
+                    <label for="loc-${loc}" style="margin:0;cursor:pointer;">${loc}</label>
+                </td>
+                <td style="text-align:center;padding:8px 4px;">
+                    <input type="checkbox" id="loc-${loc}" value="${loc}"${coverChecked} onchange="onCoverLocationChange('${loc}', this.checked)">
+                </td>
+            </tr>`;
+        });
+        tbody.innerHTML = html;
+    }
+
+    // When a cover checkbox changes, enable/disable the corresponding primary radio
+    function onCoverLocationChange(loc, isChecked) {
+        const radio = document.getElementById('primary-' + loc);
+        if (!radio) return;
+        if (!isChecked) {
+            // If unchecking cover, clear primary if it was this location
+            if (radio.checked) radio.checked = false;
+            radio.disabled = true;
+        } else {
+            radio.disabled = false;
+        }
+    }
+
+    function loadASTCheckboxes() {
+        const container = document.getElementById('astList');
+        let html = '';
+        // Emergency shown as a normal checkbox — cosmetic only, always included on save
+        html += `<div class="location-item">
+            <input type="checkbox" id="ast-Emergency" checked style="width: 18px; height: 18px;">
+            <label for="ast-Emergency">Emergency</label>
+        </div>`;
+        AST_QUALS.forEach(qual => {
+            const checked = userQuals.includes(qual) ? ' checked' : '';
+            html += `<div class="location-item"><input type="checkbox" id="ast-${qual}" value="${qual}"${checked}><label for="ast-${qual}">${qual}</label></div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    // Fix: saves locations, primary location, and AST quals to backend
+    function saveSettings() {
+        const locCheckboxes = document.querySelectorAll('#locationTableBody input[type="checkbox"]:checked');
+        const astCheckboxes = document.querySelectorAll('#astList input[type="checkbox"]:checked');
+        const primaryRadio = document.querySelector('input[name="primaryLoc"]:checked');
+
+        const newLocations = Array.from(locCheckboxes).map(cb => cb.value);
+        const selectedQuals = Array.from(astCheckboxes).map(cb => cb.value);
+        const newQuals = ['Emergency', ...selectedQuals.filter(q => q !== 'Emergency')];
+        const newPrimary = primaryRadio ? primaryRadio.value : '';
+
+        if (newLocations.length === 0) {
+            showMessage('Please select at least one location', 'error');
+            return;
+        }
+        if (newQuals.length === 0) {
+            showMessage('Please select at least one AST qualification', 'error');
+            return;
+        }
+        if (!newPrimary) {
+            showMessage('Please select a primary workplace', 'error');
+            return;
+        }
+        if (!newLocations.includes(newPrimary)) {
+            showMessage('Primary workplace must be one of your cover locations', 'error');
+            return;
+        }
+
+        showMessage('Saving settings...', 'info');
+
+        // Save locations and AST quals in parallel
+        Promise.all([
+            callBackend('updateUserLocations', {
+                email: currentUser.email,
+                locations: newLocations.join(', '),
+                role: userRole
+            }),
+            callBackend('updateUserAST', {
+                email: currentUser.email,
+                astQuals: newQuals.join(', ')
+            })
+        ]).then(([locResult, astResult]) => {
+            if (locResult.error) {
+                showMessage('Error saving locations: ' + locResult.error, 'error');
+            } else if (astResult.error) {
+                showMessage('Error saving AST qualifications: ' + astResult.error, 'error');
+            } else {
+                callBackend('updateUserPrimaryLocations', {
+                    email: currentUser.email,
+                    primaryLocations: newPrimary
+                }).then(primResult => {
+                    if (primResult.error) {
+                        showMessage('Error saving primary location: ' + primResult.error, 'error');
+                    } else {
+                        userLocations = newLocations;
+                        userQuals = newQuals;
+                        userPrimaryLocations = [newPrimary];
+                        showMessage('\u2713 Settings saved', 'success');
+                        populateSwapLocations();
+                    }
+                });
+            }
+        });
+    }
+
+    // ============================================================
+    // UTILITIES
+    // ============================================================
+
+    function refreshPendingBanner() {
+        if (userRole !== 'Officer') return;
+        callBackend('getPendingCounts', { email: currentUser.email }).then(counts => {
+            const banner = document.getElementById('pendingBanner');
+            if (!banner) return;
+            const { shiftRequests, swapProposals, swapListings } = counts;
+            if (!shiftRequests && !swapProposals && !swapListings) {
+                banner.style.display = 'none';
+                banner.innerHTML = '';
+                return;
+            }
+            let items = '';
+            if (shiftRequests > 0) {
+                items += `<span class="banner-item"><span class="banner-dot"></span>${shiftRequests} pending shift cover request${shiftRequests > 1 ? 's' : ''}</span>`;
+            }
+            if (swapListings > 0) {
+                if (items) items += '<span style="color:#ccc;">|</span>';
+                items += `<span class="banner-item"><span class="banner-dot"></span>${swapListings} shift swap listing${swapListings > 1 ? 's' : ''} awaiting review</span>`;
+            }
+            if (swapProposals > 0) {
+                if (items) items += '<span style="color:#ccc;">|</span>';
+                items += `<span class="banner-item"><span class="banner-dot"></span>${swapProposals} pending swap proposal${swapProposals > 1 ? 's' : ''}</span>`;
+            }
+            banner.innerHTML = `<div class="pending-banner">⚠ ${items} awaiting review</div>`;
+            banner.style.display = 'block';
+        });
+    }
+
+    function showMessage(text, type) {
+        const container = document.getElementById('messageContainer');
+        if (!text) { container.innerHTML = ''; return; }
+        const messageEl = document.createElement('div');
+        messageEl.className = 'message ' + type;
+        messageEl.textContent = text;
+        container.innerHTML = '';
+        container.appendChild(messageEl);
+        if (type !== 'error') setTimeout(() => { if (messageEl.parentNode) messageEl.remove(); }, 3000);
+    }
+
+
+    // ============================================================
+    // SWAP PROPOSAL (STAFF)
+    // ============================================================
+
+    // Parses availableDays string into array of {date, type, display} objects for modal radio buttons
+    function parseAvailableDaysForModal(shiftDateStr, availableDaysStr) {
+        if (!availableDaysStr) return [];
+        let shiftDate;
+        if (shiftDateStr.includes('/')) {
+            const parts = shiftDateStr.split('/');
+            if (parts.length !== 3) return [];
+            shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else if (shiftDateStr.includes('-')) {
+            const parts = shiftDateStr.split('-');
+            if (parts.length !== 3) return [];
+            shiftDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            return [];
+        }
+        const fortnightStart = getQHFortnightStart(shiftDate);
+
+        return availableDaysStr.split(',').map(entry => {
+            const trimmed = entry.trim();
+            const dashIdx = trimmed.lastIndexOf('-');
+            if (dashIdx === -1) return null;
+            const type = trimmed.substring(0, dashIdx);
+            const idx = parseInt(trimmed.substring(dashIdx + 1));
+            if (isNaN(idx)) return null;
+            const d = new Date(fortnightStart);
+            d.setDate(d.getDate() + idx);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            const dateStr = day + '/' + month + '/' + year;
+            const yearShort = String(year).slice(-2);
+            return {
+                date: dateStr,
+                type: type,
+                display: day + '/' + month + '/' + yearShort + ' ' + type
+            };
+        }).filter(Boolean);
+    }
+
+    function openProposalModal(listing) {
+        pendingProposal = listing;
+
+        // Show shift being taken
+        document.getElementById('proposalShiftDetail').innerHTML =
+            `<strong>Shift you would take:</strong> ${listing.date} - ${listing.jobType} @ ${listing.location}<br>
+             <span style="color: #666;">Currently held by: ${listing.originalName}</span>`;
+
+        document.getElementById('proposalDatesInstruction').innerHTML =
+            `The dates below <strong>${listing.originalName}</strong> is able to cover in exchange for the above shift. Please select one which you are currently working, and can exchange for the above shift:`;
+
+        // Populate radio buttons for Staff A's can-work dates
+        const dates = parseAvailableDaysForModal(listing.date, listing.availableDays);
+        const datesContainer = document.getElementById('proposalDatesContainer');
+        if (dates.length === 0) {
+            datesContainer.innerHTML = '<p style="color: #999;">No available dates specified.</p>';
+        } else {
+            datesContainer.innerHTML = dates.map((opt, i) =>
+                `<div class="location-item">
+                    <input type="radio" name="proposalDate" id="pd-${i}" value="${opt.date}|${opt.type}" style="width: 18px; height: 18px; cursor: pointer;">
+                    <label for="pd-${i}">${opt.display}</label>
+                </div>`
+            ).join('');
+        }
+
+        // Populate job type dropdown for Staff B's offered shift from backend
+        const select = document.getElementById('proposalJobType');
+        select.innerHTML = '<option value="">Loading...</option>';
+        callBackend('getJobTypesForLocation', { location: listing.location }).then(result => {
+            select.innerHTML = '<option value="">Select Job Type</option>';
+            if (result.jobTypes) {
+                result.jobTypes.forEach(jt => {
+                    const opt = document.createElement('option');
+                    opt.value = jt;
+                    opt.textContent = jt;
+                    select.appendChild(opt);
+                });
+            }
+        });
+
+        const propErr = document.getElementById('proposalError');
+        if (propErr) propErr.style.display = 'none';
+        document.getElementById('proposalModal').classList.add('active');
+    }
+
+    function closeProposalModal() {
+        document.getElementById('proposalModal').classList.remove('active');
+        const err = document.getElementById('proposalError');
+        if (err) { err.style.display = 'none'; err.textContent = ''; }
+        pendingProposal = null;
+    }
+
+    function submitSwapProposal() {
+        if (!pendingProposal) return;
+
+        const selectedDate = document.querySelector('input[name="proposalDate"]:checked');
+        const jobType = document.getElementById('proposalJobType').value;
+
+        const proposalErrEl = document.getElementById('proposalError');
+        const showProposalError = (msg) => { if (proposalErrEl) { proposalErrEl.textContent = msg; proposalErrEl.style.display = 'block'; } };
+        if (proposalErrEl) proposalErrEl.style.display = 'none';
+
+        if (!selectedDate) {
+            showProposalError('Please select a date you are currently working which you are willing to swap for the above shift');
+            return;
+        }
+        if (!jobType) {
+            showProposalError('Please select the job type of the shift you are offering');
+            return;
+        }
+
+        const [offeredDate, offeredType] = selectedDate.value.split('|');
+
+        showMessage('Submitting swap proposal...', 'info');
+        callBackend('proposeSwap', {
+            claimingEmail: currentUser.email,
+            claimingName: currentUser.name,
+            originalEmail: pendingProposal.originalEmail,
+            originalName: pendingProposal.originalName,
+            date: pendingProposal.date,
+            jobType: pendingProposal.jobType,
+            location: pendingProposal.location,
+            offeredDate: offeredDate,
+            offeredJobType: jobType
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else {
+                showMessage('✓ Swap proposal submitted — your rostering officer has been notified', 'success');
+                closeProposalModal();
+            }
+        });
+    }
+
+    function approveSwapProposalCall(claimingEmail, claimingName, originalEmail, originalName, date, jobType, location, offeredDate, offeredJobType, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Approving swap proposal...', 'info');
+        callBackend('approveSwapProposal', {
+            claimingEmail, claimingName, originalEmail, originalName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location, offeredDate, offeredJobType, sendEmail
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap proposal approved — both parties notified', 'success'); loadOfficerApprovals(); loadPendingSwaps(); refreshPendingBanner(); }
+        });
+    }
+
+    function denySwapProposalCall(claimingEmail, claimingName, date, jobType, location, notifyId) {
+        const sendEmail = notifyId ? (document.getElementById(notifyId)?.checked ?? true) : true;
+        showMessage('Denying swap proposal...', 'info');
+        callBackend('denySwapProposal', {
+            claimingEmail, claimingName,
+            officerEmail: currentUser.email, officerName: currentUser.name,
+            date, jobType, location, sendEmail
+        }).then(result => {
+            if (result.error) showMessage(result.error, 'error');
+            else { showMessage('✓ Swap proposal denied', 'success'); loadOfficerApprovals(); loadPendingSwaps(); refreshPendingBanner(); }
+        });
+    }
+
+    // Converts stored fortnight index format (e.g. "Day-0,Night-3") to readable dates
+    // anchored from the Monday of the swap shift's week (e.g. "12/06/26 Day, 15/06/26 Night")
+    // Handles both DD/MM/YYYY (vacancy format) and YYYY-MM-DD (HTML date input / Marketplace Listings)
+    function formatAvailableDays(shiftDateStr, availableDaysStr) {
+        if (!availableDaysStr) return '';
+        let shiftDate;
+        if (shiftDateStr.includes('/')) {
+            const parts = shiftDateStr.split('/');
+            if (parts.length !== 3) return availableDaysStr;
+            shiftDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        } else if (shiftDateStr.includes('-')) {
+            const parts = shiftDateStr.split('-');
+            if (parts.length !== 3) return availableDaysStr;
+            shiftDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else {
+            return availableDaysStr;
+        }
+        const fortnightStart = getQHFortnightStart(shiftDate);
+        return availableDaysStr.split(',').map(entry => {
+            const trimmed = entry.trim();
+            const dashIdx = trimmed.lastIndexOf('-');
+            if (dashIdx === -1) return trimmed;
+            const type = trimmed.substring(0, dashIdx);
+            const idx = parseInt(trimmed.substring(dashIdx + 1));
+            if (isNaN(idx)) return trimmed;
+            const d = new Date(fortnightStart);
+            d.setDate(d.getDate() + idx);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = String(d.getFullYear()).slice(-2);
+            return day + '/' + month + '/' + year + ' ' + (type === 'Day' ? 'D' : 'N');
+        }).join(', ');
+    }
+
+    // ============================================================
+    // OFFICER SETTINGS — SHIFT TYPES EDITOR
+    // ============================================================
+
+    function loadOfficerSettings() {
+        const container = document.getElementById('officerSettingsContainer');
+        if (!container) return;
+        container.innerHTML = '<p style="color:#999;">Loading shift types...</p>';
+        callBackend('getShiftTypesForOfficer', { email: currentUser.email }).then(result => {
+            renderShiftTypesEditor(Array.isArray(result) ? result : []);
+        });
+    }
+
+    function renderShiftTypesEditor(types) {
+        const container = document.getElementById('officerSettingsContainer');
+        if (!container) return;
+
+        // Group by location
+        const byLocation = {};
+        for (const t of types) {
+            if (!byLocation[t.location]) byLocation[t.location] = [];
+            byLocation[t.location].push(t);
+        }
+
+        let html = '<h4 style="margin-bottom: 16px;">Manage Shift Types</h4>';
+        html += '<p style="color:#666;font-size:13px;margin-bottom:20px;">Add new shift types for your locations. Existing shift types cannot be deleted to preserve historical records.</p>';
+
+        // Add new shift type form
+        html += `<div style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:20px;margin-bottom:24px;">
+            <h4 style="margin-bottom:14px;">Add New Shift Type</h4>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Location</label>
+                <select id="newShiftTypeLocation" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;" onchange="loadShiftTypesForLocation(this.value)">
+                    <option value="">Select location</option>`;
+        for (const loc of officerLocations) {
+            html += `<option value="${loc}">${loc}</option>`;
+        }
+        html += `</select>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Job Type Name</label>
+                <input type="text" id="newShiftTypeLabel" placeholder="e.g. Anaesthetic On-Call" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+            </div>
+            <div style="display:flex;gap:12px;margin-bottom:12px;">
+                <div style="flex:1;">
+                    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">Start Time</label>
+                    <input type="time" id="newShiftTypeStart" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">End Time</label>
+                    <input type="time" id="newShiftTypeEnd" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                </div>
+            </div>
+            <div style="margin-bottom:12px;">
+                <label style="display:block;font-size:13px;font-weight:600;margin-bottom:4px;">AST Requirement</label>
+                <select id="newShiftTypeAST" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;">
+                    <option value="">Emergency</option>
+                    <option value="Anaesthetics">Anaesthetics</option>
+                    <option value="O&G">O&G</option>
+                </select>
+            </div>
+            <div id="shiftTypeFormError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+            <button class="btn-primary" onclick="saveNewShiftType()">Add Shift Type</button>
+        </div>`;
+
+        // Existing shift types by location
+        if (types.length > 0) {
+            html += '<h4 style="margin-bottom:12px;">Existing Shift Types</h4>';
+            for (const [loc, locTypes] of Object.entries(byLocation)) {
+                html += `<div style="margin-bottom:16px;">
+                    <h5 style="color:#2c3e50;margin-bottom:8px;font-size:14px;">${loc}</h5>
+                    <table style="width:100%;border-collapse:collapse;">
+                        <tr style="background:#f9f9f9;">
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">Job Type</th>
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">Start</th>
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">End</th>
+                            <th style="padding:8px;text-align:left;border-bottom:1px solid #ddd;font-size:13px;">AST Req.</th>
+                        </tr>`;
+                for (const t of locTypes) {
+                    html += `<tr style="border-bottom:1px solid #f0f0f0;">
+                        <td style="padding:8px;font-size:13px;">${t.jobType}</td>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.startTime || '—'}</td>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.endTime || '—'}</td>
+                        <td style="padding:8px;font-size:13px;color:#666;">${t.astRequired || 'Emergency'}</td>
+                    </tr>`;
+                }
+                html += '</table></div>';
+            }
+        } else {
+            html += '<p style="color:#999;font-size:13px;">No shift types found for your locations.</p>';
+        }
+
+        container.innerHTML = html;
+    }
+
+    function saveNewShiftType() {
+        const location = document.getElementById('newShiftTypeLocation').value;
+        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
+        const startTime = document.getElementById('newShiftTypeStart').value;
+        const endTime = document.getElementById('newShiftTypeEnd').value;
+        const errEl = document.getElementById('shiftTypeFormError');
+
+        if (!location)   { errEl.textContent = 'Please select a location'; errEl.style.display = 'block'; return; }
+        if (!jobType)    { errEl.textContent = 'Please enter a job type name'; errEl.style.display = 'block'; return; }
+        if (!startTime)  { errEl.textContent = 'Please enter a start time'; errEl.style.display = 'block'; return; }
+        if (!endTime)    { errEl.textContent = 'Please enter an end time'; errEl.style.display = 'block'; return; }
+        errEl.style.display = 'none';
+
+        // Check for overnight shift — end time earlier than start time
+        const [sh, sm] = startTime.split(':').map(Number);
+        const [eh, em] = endTime.split(':').map(Number);
+        if (eh * 60 + em < sh * 60 + sm) {
+            document.getElementById('overnightStartDisplay').textContent = startTime;
+            document.getElementById('overnightEndDisplay').textContent = endTime;
+            document.getElementById('overnightModal').classList.add('active');
+            return;
+        }
+
+        submitNewShiftType();
+    }
+
+    function confirmOvernightShiftType(confirmed) {
+        document.getElementById('overnightModal').classList.remove('active');
+        if (confirmed) submitNewShiftType();
+    }
+
+    function submitNewShiftType() {
+        const location = document.getElementById('newShiftTypeLocation').value;
+        const jobType = document.getElementById('newShiftTypeLabel').value.trim();
+        const startTime = document.getElementById('newShiftTypeStart').value;
+        const endTime = document.getElementById('newShiftTypeEnd').value;
+        const astRequired = document.getElementById('newShiftTypeAST').value;
+        const errEl = document.getElementById('shiftTypeFormError');
+
+        callBackend('addShiftType', {
+            officerEmail: currentUser.email, location, jobType, startTime, endTime, astRequired
+        }).then(result => {
+            if (result.error) {
+                errEl.textContent = result.error;
+                errEl.style.display = 'block';
+            } else {
+                showMessage('\u2713 Shift type added', 'success');
+                loadOfficerSettings();
+            }
+        });
+    }
+
+
+    function logout() {
+        currentUser = null;
+        userRole = null;
+        userLocations = [];
+        userQuals = ['Emergency'];
+        userPrimaryLocations = [];
+        const banner = document.getElementById('pendingBanner');
+        if (banner) { banner.style.display = 'none'; banner.innerHTML = ''; }
+        document.getElementById('mainDashboard').style.display = 'none';
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.getElementById('emailInput').value = '';
+        document.getElementById('passwordInput').value = '';
+    }
+</script>
+
+<div id="overnightModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Overnight Shift</h3>
+        </div>
+        <p style="margin-bottom:16px;">The end time (<span id="overnightEndDisplay"></span>) is earlier than the start time (<span id="overnightStartDisplay"></span>). This will be saved as an overnight shift ending the following day.</p>
+        <p style="font-size:13px;color:#666;margin-bottom:16px;">Is that correct?</p>
+        <div class="modal-buttons">
+            <button class="btn-success" onclick="confirmOvernightShiftType(true)">Yes, overnight shift</button>
+            <button class="btn-secondary" onclick="confirmOvernightShiftType(false)">No, go back</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
