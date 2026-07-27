@@ -1,7 +1,8 @@
 const { sheets } = require('./clients');
-const { SHEET_ID } = require('./config');
+const { SHEET_ID, FRONTEND_URL } = require('./config');
 const { formatDate, normaliseDate } = require('./utils');
-const { getOfficerLocations, getStaffLocations } = require('./users');
+const { getOfficerLocations, getStaffLocations, getStaffWithLocationSubscribed } = require('./users');
+const { sendPushNotification } = require('./push');
 
 // ============================================================================
 // VACANCY FUNCTIONS
@@ -145,6 +146,8 @@ async function saveOfficerVacancies(email, vacancies) {
       vacanciesByLocation[vac.location].push(vac);
     }
 
+    const locationsWithAdditions = [];
+
     for (let location of locations) {
       if (!locationNames.includes(location)) continue;
 
@@ -152,6 +155,19 @@ async function saveOfficerVacancies(email, vacancies) {
       const newVacancies = vacanciesByLocation[location] || [];
 
       try {
+        // Read existing rows before clearing, so genuine additions can be detected
+        // after the write (key: normaliseDate(date)+'|'+jobType+'|'+location, same
+        // pattern used for the pending-applicants cross-reference above).
+        const existing = await sheets.spreadsheets.values.get({
+          spreadsheetId: SHEET_ID,
+          range: `${sheetName}!A2:D`
+        });
+        const existingKeys = new Set(
+          (existing.data.values || [])
+            .filter(row => row[0] && row[1])
+            .map(row => normaliseDate(formatDate(row[0])) + '|' + String(row[1]).trim() + '|' + location)
+        );
+
         // Clear all existing data for this location before writing
         await sheets.spreadsheets.values.clear({
           spreadsheetId: SHEET_ID,
@@ -169,8 +185,25 @@ async function saveOfficerVacancies(email, vacancies) {
           });
           console.log(`Added ${rows.length} new vacancies to ${sheetName}`);
         }
+
+        const hasGenuineAddition = newVacancies.some(vac =>
+          !existingKeys.has(normaliseDate(vac.date) + '|' + vac.jobType + '|' + location)
+        );
+        if (hasGenuineAddition) locationsWithAdditions.push(location);
       } catch (err) {
         console.error(`Error updating ${sheetName}:`, err);
+      }
+    }
+
+    // PHASE 3 — notify subscribed staff once per location with genuine additions
+    for (const location of locationsWithAdditions) {
+      try {
+        const staff = await getStaffWithLocationSubscribed(location);
+        for (const person of staff) {
+          await sendPushNotification(person.email, `New shifts at ${location}`, `New shifts have been posted at ${location}.`, FRONTEND_URL); // PHASE 3
+        }
+      } catch (err) {
+        console.error(`New-shift push notification error for ${location}:`, err.message);
       }
     }
 

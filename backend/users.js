@@ -190,6 +190,41 @@ async function updateUserAST(email, astQuals) {
 }
 
 
+// PHASE 3 — staff covering `location` with an active push subscription.
+// Reuses the Push Subscriptions sheet (same columns as push.js: A email, E active)
+// rather than tracking subscription state anywhere new.
+async function getStaffWithLocationSubscribed(location) {
+  try {
+    const [usersResult, subsResult] = await Promise.all([
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Users!A2:C' }),
+      sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: 'Push Subscriptions!A2:E' })
+    ]);
+
+    const subscribedEmails = new Set();
+    for (const row of (subsResult.data.values || [])) {
+      const rowEmail = String(row[0] || '').toLowerCase().trim();
+      const active = String(row[4] || '').toUpperCase() === 'TRUE';
+      if (rowEmail && active) subscribedEmails.add(rowEmail);
+    }
+
+    const staff = [];
+    for (const row of (usersResult.data.values || [])) {
+      const email = String(row[0] || '').toLowerCase().trim();
+      if (!email || !subscribedEmails.has(email)) continue;
+      const locations = (row[2] || '').split(',').map(l => l.trim());
+      if (locations.includes(location)) {
+        staff.push({ email: row[0], name: row[1] });
+      }
+    }
+
+    return staff;
+  } catch (err) {
+    console.error('getStaffWithLocationSubscribed error:', err);
+    return [];
+  }
+}
+
+
 module.exports = {
   checkUserExists,
   getOfficerLocations,
@@ -197,5 +232,6 @@ module.exports = {
   getAllLocations,
   updateUserLocations,
   updateUserPrimaryLocations,
-  updateUserAST
+  updateUserAST,
+  getStaffWithLocationSubscribed
 };
