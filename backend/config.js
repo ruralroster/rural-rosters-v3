@@ -5,7 +5,7 @@ const GMAIL_APP_PASSWORD = process.env.GMAIL_APP_PASSWORD;
 
 // STAGING Sheet ID
 const SHEET_ID = '1CFBuEK6P32ZA28TxrgsLpRbLKfCnLUlsOaRkH5JFDXc';
-const FRONTEND_URL = 'https://ruralroster.github.io/casualrosters-v2/';
+const FRONTEND_URL = 'https://ruralroster.github.io/rural-rosters-v3/';
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
