@@ -249,7 +249,7 @@
     // PHASE 3 — PWA, PUSH NOTIFICATIONS, OFFLINE (Crystal Cascades)
     // ============================================================
     
-    const VAPID_PUBLIC_KEY = 'REPLACE_WITH_VAPID_PUBLIC_KEY';
+    const VAPID_PUBLIC_KEY = 'BGRP68v1gMNhqhz6fi82tFZQPR0GbSGq1ZCJEVlhI1ZbOoTvl5sHaCja9w4d13tQlPyXj7UmxB_aZcLAqT0a-XA';
     let deferredInstallPrompt = null;
     
     // ── Service worker registration ──
@@ -313,6 +313,7 @@
     
     // Called from showDashboard() after login
     function maybeShowNotifyBanner() {
+        console.log('[DEBUG] banner check, permission:', Notification.permission);
         const banner = document.getElementById('notifyBanner');
         if (!banner) return;
         if (!pushSupported() || !VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.startsWith('REPLACE')) {
@@ -356,18 +357,24 @@
     
     async function subscribeToPush() {
         if (!currentUser || !pushSupported()) return;
+        console.log('[DEBUG] starting subscribe');
         const reg = await navigator.serviceWorker.ready;
+        console.log('[DEBUG] SW ready:', reg);
         let sub = await reg.pushManager.getSubscription();
+        console.log('[DEBUG] existing sub:', sub);
         if (!sub) {
             sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
             });
+            console.log('[DEBUG] new sub created:', sub);
         }
-        await callBackend('savePushSubscription', {
+        console.log('[DEBUG] calling backend with:', sub);
+        const result = await callBackend('savePushSubscription', {
             email: currentUser.email,
             subscription: JSON.stringify(sub)
         });
+        console.log('[DEBUG] backend responded:', result);
     }
     
     function urlBase64ToUint8Array(base64String) {

@@ -16,7 +16,7 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './barron-falls.jpeg',
+  './crystal-cascades.jpeg',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-192-maskable.png',
@@ -26,7 +26,11 @@ const APP_SHELL = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(APP_SHELL))
+      .then(cache => Promise.all(
+        APP_SHELL.map(url => cache.add(url).catch(err => {
+          console.warn('[SW] Failed to precache (skipping):', url, err);
+        }))
+      ))
       .then(() => self.skipWaiting())
   );
 });

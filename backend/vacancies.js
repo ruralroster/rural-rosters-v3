@@ -187,7 +187,7 @@ async function saveOfficerVacancies(email, vacancies) {
         }
 
         const hasGenuineAddition = newVacancies.some(vac =>
-          !existingKeys.has(normaliseDate(vac.date) + '|' + vac.jobType + '|' + location)
+          !existingKeys.has(normaliseDate(vac.date) + '|' + String(vac.jobType).trim() + '|' + location)
         );
         if (hasGenuineAddition) locationsWithAdditions.push(location);
       } catch (err) {
