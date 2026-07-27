@@ -653,7 +653,7 @@
                 <div id="tab-0" class="tab-content active">
                     <h3>My Vacancies</h3>
                     <button class="btn-primary" onclick="addVacancyRow()">+ Add Shift</button>
-                    <button class="btn-primary" onclick="saveVacancies()" style="margin-left: 10px;">Save Changes</button>
+                    <button id="saveVacanciesBtn" class="btn-primary" onclick="saveVacancies()" style="margin-left: 10px;">Save Changes</button>
                     <div id="vacanciesContainer"></div>
                 </div>
                 <div id="tab-1" class="tab-content"><h3>Shift Cover Approvals</h3><div id="approvalsContainer"></div></div>
@@ -856,6 +856,9 @@
             return;
         }
 
+        const saveBtn = document.getElementById('saveVacanciesBtn');
+        if (saveBtn) saveBtn.disabled = true;
+
         showMessage('Saving vacancies...', 'info');
         callBackend('saveOfficerVacancies', {
             email: currentUser.email,
@@ -863,6 +866,11 @@
         }).then(result => {
             if (result.error) showMessage(result.error, 'error');
             else { showMessage('\u2713 Vacancies saved', 'success'); loadMyVacancies(); }
+            if (saveBtn) saveBtn.disabled = false;
+        }).catch(err => {
+            console.error('saveVacancies error:', err);
+            showMessage('Failed to save vacancies', 'error');
+            if (saveBtn) saveBtn.disabled = false;
         });
     }
 
