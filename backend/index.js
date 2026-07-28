@@ -9,6 +9,7 @@ const users = require('./users');
 const vacancies = require('./vacancies');
 const requests = require('./requests');
 const marketplace = require('./marketplace');
+const ics = require('./ics');
 
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -32,6 +33,7 @@ const server = http.createServer((req, res) => {
         case 'getOfficerLocations':       result = await users.getOfficerLocations(params.email); break;
         case 'getStaffLocations':         result = await users.getStaffLocations(params.email); break;
         case 'getJobTypesForLocation':    result = await vacancies.getJobTypesForLocation(params.location); break;
+        case 'getShiftTimesForJobType':   result = await ics.getShiftTimes(params.location, params.jobType); break;
         case 'getOfficerVacancies':       result = await vacancies.getOfficerVacancies(params.email); break;
         case 'getStaffAvailableShifts':   result = await vacancies.getStaffAvailableShifts(params.email); break;
         case 'requestShifts':             result = await requests.requestShifts(params.email, params.name, params.shifts); break;

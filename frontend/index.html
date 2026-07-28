@@ -217,6 +217,22 @@
     </div>
 </div>
 
+<div id="myRosterModal" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">
+            <h3>Add My Roster</h3>
+            <button class="info-icon" onclick="toggleModalHelp('myRosterHelp')" title="What is this?">i</button>
+        </div>
+        <div id="myRosterHelp" class="modal-help">
+            Record shifts you're already rostered to work elsewhere (not through Rural Rosters). Pick a date, then a location, then a job type — the shift is saved as soon as you select it, so you can add as many as you need before closing. Saved on this device only.
+        </div>
+        <div id="myRosterModalBody"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="closeMyRosterModal()">Save &amp; Close</button>
+        </div>
+    </div>
+</div>
+
 <script>
     // UPDATE THIS after first staging deploy — get URL from Cloud Run console
     function toggleModalHelp(id) {
@@ -380,153 +396,305 @@
     }
     
     // ============================================================
-    // PHASE 3 — AVAILABILITY BLACKOUTS (IndexedDB, device-local)
+    // PHASE 4 — MY ROSTER (IndexedDB, device-local)
     // ============================================================
-    
-    const BLACKOUT_DB = 'rural-rosters';
-    const BLACKOUT_STORE = 'blackouts';   // keyPath: date (YYYY-MM-DD)
-    const BLACKOUT_PREFS = 'prefs';       // keyPath: key
-    
-    function openBlackoutDB() {
+
+    const ROSTER_DB = 'rural-rosters';
+    const ROSTER_STORE = 'myRoster'; // autoIncrement key; { date (DD/MM/YYYY), location, jobType, startTime, endTime }
+
+    function openRosterDB() {
         return new Promise((resolve, reject) => {
-            const req = indexedDB.open(BLACKOUT_DB, 1);
+            const req = indexedDB.open(ROSTER_DB, 2);
             req.onupgradeneeded = () => {
                 const db = req.result;
-                if (!db.objectStoreNames.contains(BLACKOUT_STORE)) db.createObjectStore(BLACKOUT_STORE, { keyPath: 'date' });
-                if (!db.objectStoreNames.contains(BLACKOUT_PREFS)) db.createObjectStore(BLACKOUT_PREFS, { keyPath: 'key' });
+                if (db.objectStoreNames.contains('blackouts')) db.deleteObjectStore('blackouts');
+                if (db.objectStoreNames.contains('prefs')) db.deleteObjectStore('prefs');
+                if (!db.objectStoreNames.contains(ROSTER_STORE)) db.createObjectStore(ROSTER_STORE, { keyPath: 'id', autoIncrement: true });
             };
             req.onsuccess = () => resolve(req.result);
             req.onerror = () => reject(req.error);
         });
     }
-    
-    async function getBlackoutDates() {
+
+    async function getMyRosterEntries() {
         try {
-            const db = await openBlackoutDB();
+            const db = await openRosterDB();
             return new Promise((resolve) => {
-                const tx = db.transaction(BLACKOUT_STORE, 'readonly');
-                const req = tx.objectStore(BLACKOUT_STORE).getAll();
-                req.onsuccess = () => resolve((req.result || []).map(r => r.date).sort());
+                const tx = db.transaction(ROSTER_STORE, 'readonly');
+                const req = tx.objectStore(ROSTER_STORE).getAll();
+                req.onsuccess = () => resolve(req.result || []);
                 req.onerror = () => resolve([]);
             });
         } catch (e) { return []; }
     }
-    
-    async function addBlackoutDate(dateISO) {
-        const db = await openBlackoutDB();
+
+    async function addMyRosterEntry(entry) {
+        const db = await openRosterDB();
         return new Promise((resolve, reject) => {
-            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
-            tx.objectStore(BLACKOUT_STORE).put({ date: dateISO, added: new Date().toISOString() });
+            const tx = db.transaction(ROSTER_STORE, 'readwrite');
+            tx.objectStore(ROSTER_STORE).add(entry);
             tx.oncomplete = () => resolve();
             tx.onerror = () => reject(tx.error);
         });
     }
-    
-    async function removeBlackoutDate(dateISO) {
-        const db = await openBlackoutDB();
+
+    async function removeMyRosterEntry(id) {
+        const db = await openRosterDB();
         return new Promise((resolve) => {
-            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
-            tx.objectStore(BLACKOUT_STORE).delete(dateISO);
+            const tx = db.transaction(ROSTER_STORE, 'readwrite');
+            tx.objectStore(ROSTER_STORE).delete(id);
             tx.oncomplete = () => resolve();
             tx.onerror = () => resolve();
         });
     }
-    
-    async function clearBlackoutDates() {
-        const db = await openBlackoutDB();
+
+    async function clearMyRosterEntries() {
+        const db = await openRosterDB();
         return new Promise((resolve) => {
-            const tx = db.transaction(BLACKOUT_STORE, 'readwrite');
-            tx.objectStore(BLACKOUT_STORE).clear();
+            const tx = db.transaction(ROSTER_STORE, 'readwrite');
+            tx.objectStore(ROSTER_STORE).clear();
             tx.oncomplete = () => resolve();
             tx.onerror = () => resolve();
         });
     }
-    
-    async function getBlackoutDisplayMode() {
-        try {
-            const db = await openBlackoutDB();
-            return new Promise((resolve) => {
-                const tx = db.transaction(BLACKOUT_PREFS, 'readonly');
-                const req = tx.objectStore(BLACKOUT_PREFS).get('displayMode');
-                req.onsuccess = () => resolve((req.result && req.result.value) || 'grey');
-                req.onerror = () => resolve('grey');
-            });
-        } catch (e) { return 'grey'; }
-    }
-    
-    async function setBlackoutDisplayMode(mode) {
-        const db = await openBlackoutDB();
-        return new Promise((resolve) => {
-            const tx = db.transaction(BLACKOUT_PREFS, 'readwrite');
-            tx.objectStore(BLACKOUT_PREFS).put({ key: 'displayMode', value: mode });
-            tx.oncomplete = () => resolve();
-            tx.onerror = () => resolve();
-        });
-    }
-    
-    // Converts DD/MM/YYYY (app format) to YYYY-MM-DD (blackout key format)
+
+    // Converts DD/MM/YYYY (app format) to YYYY-MM-DD (used for date-only comparisons)
     function toISODate(ddmmyyyy) {
         const parts = String(ddmmyyyy).split('/');
         if (parts.length !== 3) return '';
         return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
     }
+
+    // ── My Roster section (staff Settings tab) ──
     
-    // ── My Availability section (staff Settings tab) ──
-    
-    async function loadAvailabilitySection() {
+    async function loadMyRosterListSection() {
         const container = document.getElementById('availabilityContainer');
         if (!container) return;
-        const [dates, mode] = await Promise.all([getBlackoutDates(), getBlackoutDisplayMode()]);
+        const entries = await getMyRosterEntries();
+        entries.sort((a, b) => toISODate(a.date).localeCompare(toISODate(b.date)));
         let listHtml = '';
-        if (dates.length === 0) {
-            listHtml = '<p style="color:#999;font-size:13px;">No unavailable dates set on this device.</p>';
+        if (entries.length === 0) {
+            listHtml = '<p style="color:#999;font-size:13px;">No roster entries added on this device.</p>';
         } else {
-            listHtml = dates.map(d => {
-                const [y, m, day] = d.split('-');
-                return `<span style="display:inline-flex;align-items:center;gap:6px;background:#f0f0f0;border-radius:12px;padding:4px 10px;margin:0 6px 6px 0;font-size:13px;">
-                    ${day}/${m}/${y}
-                    <button onclick="removeBlackoutAndRefresh('${d}')" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;line-height:1;" title="Remove">\u00d7</button>
-                </span>`;
-            }).join('');
-            listHtml += `<div style="margin-top:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="clearBlackoutsAndRefresh()">Clear all</button></div>`;
+            listHtml = entries.map(e => `
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f0f0;border-radius:4px;padding:6px 10px;margin-bottom:6px;font-size:13px;">
+                    <span>${e.date} - ${e.jobType} @ ${e.location}</span>
+                    <button onclick="removeMyRosterEntryAndRefresh(${e.id})" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;line-height:1;" title="Remove">\u00d7</button>
+                </div>`
+            ).join('');
+            listHtml += `<div style="margin-top:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="clearMyRosterAndRefresh()">Clear all</button></div>`;
         }
         container.innerHTML = `
             <p style="color:#666;font-size:13px;margin-bottom:12px;">
-                Mark dates you cannot work. These are saved <strong>on this device only</strong> —
-                they are not shared with rostering officers and will not carry over to other phones or browsers.
+                Record shifts you're already rostered to work elsewhere (not through Rural Rosters), so this device can warn you
+                about date conflicts when browsing available shifts. Saved <strong>on this device only</strong> —
+                not shared with rostering officers and will not carry over to other phones or browsers.
             </p>
-            <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap;">
-                <input type="date" id="blackoutDateInput" style="padding:8px;border:1px solid #ddd;border-radius:4px;">
-                <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="addBlackoutAndRefresh()">Mark unavailable</button>
+            <div style="margin-bottom:14px;">
+                <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openMyRosterModal()">+ Add my roster</button>
             </div>
-            <div style="margin-bottom:14px;">${listHtml}</div>
-            <div style="font-size:13px;color:#666;">
-                Show shifts on unavailable dates as:
-                <label style="margin-left:10px;cursor:pointer;"><input type="radio" name="blackoutMode" value="grey" ${mode === 'grey' ? 'checked' : ''} onchange="setBlackoutModeAndRefresh('grey')"> Greyed out</label>
-                <label style="margin-left:10px;cursor:pointer;"><input type="radio" name="blackoutMode" value="hide" ${mode === 'hide' ? 'checked' : ''} onchange="setBlackoutModeAndRefresh('hide')"> Hidden</label>
+            <div>${listHtml}</div>`;
+    }
+    
+    async function removeMyRosterEntryAndRefresh(id) {
+        await removeMyRosterEntry(id);
+        loadMyRosterListSection();
+    }
+
+    async function clearMyRosterAndRefresh() {
+        await clearMyRosterEntries();
+        loadMyRosterListSection();
+    }
+
+    // ============================================================
+    // REUSABLE MONTH CALENDAR
+    // ============================================================
+
+    // container: DOM element to render into.
+    // state: { year, month } (month is 0-indexed) — mutated in place by nav clicks.
+    // renderDayContent(dateStr): optional; dateStr is DD/MM/YYYY; returns HTML for extra content in that cell.
+    // onDayClick(dateStr): optional; called when a day cell (not a nav button) is clicked.
+    function renderMonthCalendar(container, state, renderDayContent, onDayClick) {
+        const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const { year, month } = state;
+        const startWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+            <button type="button" class="btn-secondary cal-nav-prev" style="padding:6px 12px;">&larr;</button>
+            <strong>${monthNames[month]} ${year}</strong>
+            <button type="button" class="btn-secondary cal-nav-next" style="padding:6px 12px;">&rarr;</button>
+        </div>`;
+
+        html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+        ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(d => {
+            html += `<div style="text-align:center;font-size:11px;font-weight:600;color:#666;padding:4px 0;">${d}</div>`;
+        });
+        for (let i = 0; i < startWeekday; i++) html += '<div></div>';
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = String(day).padStart(2, '0') + '/' + String(month + 1).padStart(2, '0') + '/' + year;
+            const extra = renderDayContent ? (renderDayContent(dateStr) || '') : '';
+            html += `<div class="cal-day-cell" data-cal-date="${dateStr}" style="min-height:42px;border:1px solid #ddd;border-radius:4px;padding:4px;cursor:pointer;font-size:12px;">
+                <div>${day}</div>${extra}
             </div>`;
+        }
+        html += '</div>';
+
+        container.innerHTML = html;
+
+        container.querySelector('.cal-nav-prev').onclick = () => {
+            state.month--;
+            if (state.month < 0) { state.month = 11; state.year--; }
+            renderMonthCalendar(container, state, renderDayContent, onDayClick);
+        };
+        container.querySelector('.cal-nav-next').onclick = () => {
+            state.month++;
+            if (state.month > 11) { state.month = 0; state.year++; }
+            renderMonthCalendar(container, state, renderDayContent, onDayClick);
+        };
+
+        if (onDayClick) {
+            container.querySelectorAll('.cal-day-cell').forEach(cell => {
+                cell.onclick = () => onDayClick(cell.getAttribute('data-cal-date'));
+            });
+        }
     }
-    
-    async function addBlackoutAndRefresh() {
-        const input = document.getElementById('blackoutDateInput');
-        if (!input || !input.value) { showMessage('Please pick a date first', 'error'); return; }
-        await addBlackoutDate(input.value);
-        input.value = '';
-        loadAvailabilitySection();
+
+    // ============================================================
+    // "ADD MY ROSTER" MODAL (staff)
+    // ============================================================
+
+    let myRosterCalState = null;              // { year, month } for the modal's calendar view
+    let myRosterStep = 'calendar';            // 'calendar' | 'location' | 'jobtype'
+    let myRosterSelectedDate = null;
+    let myRosterSelectedLocation = null;
+    let myRosterEntryDatesCache = new Set();  // ISO dates (YYYY-MM-DD) that already have a myRoster entry
+    let myRosterLocationsCache = null;
+
+    async function openMyRosterModal() {
+        const today = new Date();
+        myRosterCalState = { year: today.getFullYear(), month: today.getMonth() };
+        myRosterStep = 'calendar';
+        myRosterSelectedDate = null;
+        myRosterSelectedLocation = null;
+        myRosterLocationsCache = null;
+        await refreshMyRosterEntryDatesCache();
+        renderMyRosterModalBody();
+        document.getElementById('myRosterModal').classList.add('active');
     }
-    
-    async function removeBlackoutAndRefresh(dateISO) {
-        await removeBlackoutDate(dateISO);
-        loadAvailabilitySection();
+
+    function closeMyRosterModal() {
+        document.getElementById('myRosterModal').classList.remove('active');
+        loadMyRosterListSection();
     }
-    
-    async function clearBlackoutsAndRefresh() {
-        await clearBlackoutDates();
-        loadAvailabilitySection();
+
+    async function refreshMyRosterEntryDatesCache() {
+        const entries = await getMyRosterEntries();
+        myRosterEntryDatesCache = new Set(entries.map(e => toISODate(e.date)));
     }
-    
-    async function setBlackoutModeAndRefresh(mode) {
-        await setBlackoutDisplayMode(mode);
+
+    function renderMyRosterModalBody() {
+        const body = document.getElementById('myRosterModalBody');
+        if (!body) return;
+
+        if (myRosterStep === 'location') {
+            body.innerHTML = `
+                <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="myRosterBackToCalendar(); return false;">&larr; Back</a></p>
+                <p style="margin-bottom:10px;"><strong>${myRosterSelectedDate}</strong> — select a location:</p>
+                <div id="myRosterLocationList"><p style="color:#999;font-size:13px;">Loading...</p></div>`;
+            const listEl = document.getElementById('myRosterLocationList');
+            const populate = (locations) => {
+                if (!locations || locations.length === 0) {
+                    listEl.innerHTML = '<p style="color:#999;font-size:13px;">No locations found.</p>';
+                    return;
+                }
+                listEl.innerHTML = locations.map(loc =>
+                    `<button type="button" class="btn-secondary" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 12px;" onclick="myRosterSelectLocation('${loc}')">${loc}</button>`
+                ).join('');
+            };
+            if (myRosterLocationsCache) {
+                populate(myRosterLocationsCache);
+            } else {
+                callBackend('getAllLocations', {}).then(locations => {
+                    myRosterLocationsCache = locations || [];
+                    populate(myRosterLocationsCache);
+                });
+            }
+            return;
+        }
+
+        if (myRosterStep === 'jobtype') {
+            body.innerHTML = `
+                <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="myRosterBackToLocation(); return false;">&larr; Back</a></p>
+                <p style="margin-bottom:10px;"><strong>${myRosterSelectedDate} @ ${myRosterSelectedLocation}</strong> — select a job type:</p>
+                <div id="myRosterJobTypeList"><p style="color:#999;font-size:13px;">Loading...</p></div>`;
+            const listEl = document.getElementById('myRosterJobTypeList');
+            callBackend('getJobTypesForLocation', { location: myRosterSelectedLocation }).then(result => {
+                const jobTypes = result.jobTypes || [];
+                if (jobTypes.length === 0) {
+                    listEl.innerHTML = '<p style="color:#999;font-size:13px;">No job types configured for this location.</p>';
+                    return;
+                }
+                listEl.innerHTML = jobTypes.map(jt =>
+                    `<button type="button" class="btn-secondary" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 12px;" onclick="myRosterSelectJobType('${jt}')">${jt}</button>`
+                ).join('');
+            });
+            return;
+        }
+
+        // 'calendar' step (default)
+        body.innerHTML = '<div id="myRosterCalendarContainer"></div>';
+        renderMonthCalendar(
+            document.getElementById('myRosterCalendarContainer'),
+            myRosterCalState,
+            (dateStr) => myRosterEntryDatesCache.has(toISODate(dateStr))
+                ? '<div style="width:6px;height:6px;border-radius:50%;background:#2c3e50;margin:2px auto 0;"></div>'
+                : '',
+            (dateStr) => {
+                myRosterSelectedDate = dateStr;
+                myRosterStep = 'location';
+                renderMyRosterModalBody();
+            }
+        );
+    }
+
+    function myRosterBackToCalendar() {
+        myRosterStep = 'calendar';
+        renderMyRosterModalBody();
+    }
+
+    function myRosterBackToLocation() {
+        myRosterStep = 'location';
+        renderMyRosterModalBody();
+    }
+
+    function myRosterSelectLocation(location) {
+        myRosterSelectedLocation = location;
+        myRosterStep = 'jobtype';
+        renderMyRosterModalBody();
+    }
+
+    async function myRosterSelectJobType(jobType) {
+        const times = await callBackend('getShiftTimesForJobType', { location: myRosterSelectedLocation, jobType });
+        await addMyRosterEntry({
+            date: myRosterSelectedDate,
+            location: myRosterSelectedLocation,
+            jobType: jobType,
+            startTime: (times && times.start) || '',
+            endTime: (times && times.end) || ''
+        });
+        await refreshMyRosterEntryDatesCache();
+
+        // Inline confirmation inside the modal body — showMessage() renders behind the
+        // modal overlay, so it's invisible until the modal closes. Shown briefly here
+        // instead, then the wizard returns to the calendar step.
+        const body = document.getElementById('myRosterModalBody');
+        if (body) {
+            body.innerHTML = `<div class="message success">✓ Added ${myRosterSelectedDate} - ${jobType} @ ${myRosterSelectedLocation} to your roster</div>`;
+        }
+        myRosterSelectedLocation = null;
+        myRosterStep = 'calendar';
+        setTimeout(() => renderMyRosterModalBody(), 1000);
     }
 
     // AST qualification options — fixed controlled vocabulary matching the Shift Types sheet
@@ -708,9 +876,9 @@
                             <tbody id="locationTableBody"></tbody>
                         </table>
                     </div>
-                    <!-- PHASE 3: device-local availability blackouts -->
+                    <!-- PHASE 4: device-local roster (used for shift-conflict detection) -->
                     <div class="settings-section">
-                        <h4>My Availability (this device)</h4>
+                        <h4>My Roster (this device)</h4>
                         <div id="availabilityContainer"><p style="color:#999;font-size:13px;">Loading...</p></div>
                     </div>
                     <div class="settings-section">
@@ -724,7 +892,7 @@
             populateSwapLocations();
             loadLocationCheckboxes();
             loadASTCheckboxes();
-            loadAvailabilitySection(); // PHASE 3
+            loadMyRosterListSection(); // PHASE 4
         }
     }
 
@@ -1351,52 +1519,44 @@
     // SHIFTS (STAFF)
     // ============================================================
 
-// PHASE 3: blackout-aware versions of loadStaffShifts/renderAllShifts
+// PHASE 4: myRoster-conflict-aware versions of loadStaffShifts/renderAllShifts
     function loadStaffShifts() {
         showMessage('Loading shifts...', 'info');
         Promise.all([
             callBackend('getStaffAvailableShifts', {email: currentUser.email}),
-            getBlackoutDates(),
-            getBlackoutDisplayMode()
-        ]).then(([shifts, blackouts, mode]) => {
-            renderAllShifts(shifts || [], new Set(blackouts), mode);
+            getMyRosterEntries()
+        ]).then(([shifts, rosterEntries]) => {
+            const conflictDates = new Set(rosterEntries.map(e => toISODate(e.date)));
+            renderAllShifts(shifts || [], conflictDates);
         });
     }
 
-    function renderAllShifts(shifts, blackoutSet, blackoutMode) {
-        blackoutSet = blackoutSet || new Set();
-        blackoutMode = blackoutMode || 'grey';
+    function renderAllShifts(shifts, conflictDates) {
+        conflictDates = conflictDates || new Set();
         const container = document.getElementById('shiftsContainer');
 
-        const visible = shifts.filter(s => !(blackoutMode === 'hide' && blackoutSet.has(toISODate(s.date))));
-        const hiddenCount = shifts.length - visible.length;
-
-        if (!visible || visible.length === 0) {
-            container.innerHTML = hiddenCount > 0
-                ? `<p style="color: #999;">No shifts available (${hiddenCount} hidden on your unavailable dates \u2014 see Settings)</p>`
-                : '<p style="color: #999;">No shifts available</p>';
+        if (!shifts || shifts.length === 0) {
+            container.innerHTML = '<p style="color: #999;">No shifts available</p>';
             return;
         }
 
         let html = '';
-        visible.forEach((shift, idx) => {
+        shifts.forEach((shift, idx) => {
             const pending = shift.hasPendingApplicants;
-            const blackedOut = blackoutSet.has(toISODate(shift.date));
-            const dim = pending || blackedOut;
+            // Whole-day check against My Roster \u2014 not a precise time-overlap check (v1)
+            const hasConflict = conflictDates.has(toISODate(shift.date));
+            const dim = pending || hasConflict;
             html += `<div class="shift-item" style="${dim ? 'opacity:0.7;' : ''}">
                 <div class="shift-item-header">
                     <input type="checkbox" class="shift-checkbox" value="${idx}" data-pending="${pending ? 'true' : 'false'}" style="margin-right: 10px;">
                     <label style="margin-bottom: 0; flex: 1; ${dim ? 'color:#999;' : ''}">
                         <strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong>
                         ${pending ? '<span style="font-size:11px;color:#aaa;margin-left:6px;">(application pending approval)</span>' : ''}
-                        ${blackedOut ? '<span style="font-size:11px;color:#c0392b;margin-left:6px;">(you marked this date unavailable)</span>' : ''}
+                        ${hasConflict ? '<span style="font-size:11px;color:#c0392b;margin-left:6px;">(conflicts with your roster)</span>' : ''}
                     </label>
                 </div>
             </div>`;
         });
-        if (hiddenCount > 0) {
-            html += `<p style="color:#999;font-size:12px;margin-top:8px;">${hiddenCount} shift(s) hidden on your unavailable dates \u2014 manage in Settings.</p>`;
-        }
         container.innerHTML = html;
     }
 
