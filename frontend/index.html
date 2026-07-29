@@ -153,7 +153,7 @@
     </div>
 </div>
 
-<div id="backupConfirmModal" class="modal">
+<div id="backupConfirmModal" class="modal" style="z-index: 1100;">
     <div class="modal-content">
         <div class="modal-header">
             <h3>Shifts Already Applied For</h3>
@@ -229,6 +229,22 @@
         <div id="myRosterModalBody"></div>
         <div class="modal-buttons">
             <button class="btn-primary" onclick="closeMyRosterModal()">Save &amp; Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="selectShiftModal" class="modal">
+    <div class="modal-content" style="max-width: 480px;">
+        <div class="modal-header">
+            <h3>Select a Shift</h3>
+            <button class="info-icon" onclick="toggleModalHelp('selectShiftHelp')" title="What is this?">i</button>
+        </div>
+        <div id="selectShiftHelp" class="modal-help">
+            Browse available shifts by date. Each dot on a date marks a shift, colour-coded by location. Tap a date to see its shifts, then tap a shift to apply.
+        </div>
+        <div id="selectShiftModalBody"></div>
+        <div class="modal-buttons">
+            <button class="btn-secondary" onclick="closeSelectShiftModal()">Close</button>
         </div>
     </div>
 </div>
@@ -490,8 +506,9 @@
                 about date conflicts when browsing available shifts. Saved <strong>on this device only</strong> —
                 not shared with rostering officers and will not carry over to other phones or browsers.
             </p>
-            <div style="margin-bottom:14px;">
+            <div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openMyRosterModal()">+ Add my roster</button>
+                <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openSelectShiftModal()">Select a shift</button>
             </div>
             <div>${listHtml}</div>`;
     }
@@ -695,6 +712,175 @@
         myRosterSelectedLocation = null;
         myRosterStep = 'calendar';
         setTimeout(() => renderMyRosterModalBody(), 1000);
+    }
+
+    // ============================================================
+    // "SELECT A SHIFT" MODAL (staff) — Part 2, reuses renderMonthCalendar()
+    // ============================================================
+
+    // Assigned to distinct locations by order of first appearance in the fetched
+    // shifts — deterministic per fetch, not re-randomised on every render.
+    const CALENDAR_LOCATION_PALETTE = ['#2c6e6a', '#c0392b', '#8e44ad', '#d68910', '#2980b9', '#16a085', '#ad1457', '#6d4c41'];
+
+    let selectShiftCalState = null;               // { year, month } for the modal's calendar view
+    let selectShiftStep = 'calendar';             // 'calendar' | 'day' | 'confirm'
+    let selectShiftAllShifts = [];                // raw shift objects from getStaffAvailableShifts
+    let selectShiftShiftsByDate = new Map();      // DD/MM/YYYY -> shift[] (real objects, not re-parsed text)
+    let selectShiftLocationColors = new Map();    // location -> palette colour
+    let selectShiftSelectedDate = null;
+    let selectShiftPendingShift = null;           // the real shift object awaiting confirmation
+
+    async function openSelectShiftModal() {
+        const today = new Date();
+        selectShiftCalState = { year: today.getFullYear(), month: today.getMonth() };
+        selectShiftStep = 'calendar';
+        selectShiftSelectedDate = null;
+        selectShiftPendingShift = null;
+        await refreshSelectShiftData();
+        renderSelectShiftModalBody();
+        document.getElementById('selectShiftModal').classList.add('active');
+    }
+
+    function closeSelectShiftModal() {
+        document.getElementById('selectShiftModal').classList.remove('active');
+    }
+
+    async function refreshSelectShiftData() {
+        const shifts = await callBackend('getStaffAvailableShifts', { email: currentUser.email });
+        selectShiftAllShifts = Array.isArray(shifts) ? shifts : [];
+        selectShiftShiftsByDate = new Map();
+        selectShiftLocationColors = new Map();
+        selectShiftAllShifts.forEach(shift => {
+            if (!selectShiftLocationColors.has(shift.location)) {
+                selectShiftLocationColors.set(shift.location, CALENDAR_LOCATION_PALETTE[selectShiftLocationColors.size % CALENDAR_LOCATION_PALETTE.length]);
+            }
+            if (!selectShiftShiftsByDate.has(shift.date)) selectShiftShiftsByDate.set(shift.date, []);
+            selectShiftShiftsByDate.get(shift.date).push(shift);
+        });
+    }
+
+    // Called after a successful apply (direct or via the shared backup-confirmation
+    // modal) so the calendar reflects the shift's new pending state immediately.
+    async function refreshSelectShiftModal() {
+        const modal = document.getElementById('selectShiftModal');
+        if (!modal || !modal.classList.contains('active')) return;
+        await refreshSelectShiftData();
+        renderSelectShiftModalBody();
+    }
+
+    function renderSelectShiftModalBody() {
+        const body = document.getElementById('selectShiftModalBody');
+        if (!body) return;
+
+        if (selectShiftStep === 'day') {
+            const shifts = selectShiftShiftsByDate.get(selectShiftSelectedDate) || [];
+            body.innerHTML = `
+                <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="selectShiftBackToCalendar(); return false;">&larr; Back</a></p>
+                <p style="margin-bottom:10px;"><strong>${selectShiftSelectedDate}</strong> — shifts available:</p>
+                <div id="selectShiftDayList"></div>`;
+            const listEl = document.getElementById('selectShiftDayList');
+            if (shifts.length === 0) {
+                listEl.innerHTML = '<p style="color:#999;font-size:13px;">No shifts on this date.</p>';
+            } else {
+                listEl.innerHTML = shifts.map((shift, i) => {
+                    const color = selectShiftLocationColors.get(shift.location) || '#666';
+                    return `<div class="shift-item" style="border-left-color:${color};cursor:pointer;" onclick="selectShiftPickFromDay(${i})">
+                        <div class="shift-item-header">
+                            <label style="margin-bottom:0;flex:1;">
+                                <strong>${shift.jobType} @ ${shift.location}</strong>
+                                ${shift.hasPendingApplicants ? '<span style="font-size:11px;color:#aaa;margin-left:6px;">(application pending approval)</span>' : ''}
+                            </label>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+            return;
+        }
+
+        if (selectShiftStep === 'confirm') {
+            const shift = selectShiftPendingShift;
+            if (!shift) { selectShiftStep = 'calendar'; renderSelectShiftModalBody(); return; }
+            body.innerHTML = `
+                <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="selectShiftBackToDay(); return false;">&larr; Back</a></p>
+                <div style="background:#f9f9f9;padding:12px;border-radius:4px;margin-bottom:16px;">
+                    <strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong>
+                    ${shift.hasPendingApplicants ? '<div style="font-size:12px;color:#aaa;margin-top:4px;">Already has an applicant pending approval — you can apply as backup</div>' : ''}
+                </div>
+                <p style="margin-bottom:16px;">Apply for this shift?</p>
+                <div style="display:flex;gap:10px;">
+                    <button class="btn-success" onclick="selectShiftConfirmApply()">Yes, apply</button>
+                    <button class="btn-secondary" onclick="selectShiftBackToDay()">Cancel</button>
+                </div>`;
+            return;
+        }
+
+        // 'calendar' step (default)
+        body.innerHTML = '<div id="selectShiftCalendarContainer"></div>';
+        renderMonthCalendar(
+            document.getElementById('selectShiftCalendarContainer'),
+            selectShiftCalState,
+            (dateStr) => {
+                const shifts = selectShiftShiftsByDate.get(dateStr);
+                if (!shifts || shifts.length === 0) return '';
+                const dots = shifts.slice(0, 4).map(s => {
+                    const color = selectShiftLocationColors.get(s.location) || '#666';
+                    return `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin:1px;"></span>`;
+                }).join('');
+                const extra = shifts.length > 4 ? `<div style="font-size:9px;color:#666;">+${shifts.length - 4}</div>` : '';
+                return `<div style="margin-top:2px;">${dots}</div>${extra}`;
+            },
+            (dateStr) => {
+                selectShiftSelectedDate = dateStr;
+                selectShiftStep = 'day';
+                renderSelectShiftModalBody();
+            }
+        );
+    }
+
+    function selectShiftBackToCalendar() {
+        selectShiftStep = 'calendar';
+        renderSelectShiftModalBody();
+    }
+
+    function selectShiftBackToDay() {
+        selectShiftStep = 'day';
+        renderSelectShiftModalBody();
+    }
+
+    function selectShiftPickFromDay(idx) {
+        const shifts = selectShiftShiftsByDate.get(selectShiftSelectedDate) || [];
+        selectShiftPendingShift = shifts[idx];
+        selectShiftStep = 'confirm';
+        renderSelectShiftModalBody();
+    }
+
+    function selectShiftConfirmApply() {
+        const shift = selectShiftPendingShift;
+        if (!shift) return;
+
+        if (shift.hasPendingApplicants) {
+            // Route through the existing shared backup-confirmation modal, exactly as
+            // requestShifts() does. backupConfirmModal has a raised z-index so it renders
+            // on top of this modal, which stays open underneath during the detour.
+            pendingBackupRequest = {
+                allShifts: [shift],
+                normalShifts: [],
+                pendingShifts: [shift],
+                checkboxes: [],
+                onSuccess: refreshSelectShiftModal
+            };
+            document.getElementById('backupShiftList').innerHTML =
+                `<div style="background:#fff8e1;border-left:3px solid #E6A817;padding:8px 12px;margin-bottom:6px;border-radius:3px;font-size:13px;">
+                    <strong>${shift.date} - ${shift.jobType} @ ${shift.location}</strong>
+                </div>`;
+            document.getElementById('backupConfirmModal').classList.add('active');
+        } else {
+            submitShiftRequests([{ date: shift.date, jobType: shift.jobType, location: shift.location }], [], refreshSelectShiftModal);
+        }
+
+        selectShiftPendingShift = null;
+        selectShiftStep = 'calendar';
+        renderSelectShiftModalBody();
     }
 
     // AST qualification options — fixed controlled vocabulary matching the Shift Types sheet
@@ -1601,7 +1787,7 @@
     function confirmBackupRequest(includeBackup) {
         document.getElementById('backupConfirmModal').classList.remove('active');
         if (!pendingBackupRequest) return;
-        const { allShifts, normalShifts, pendingShifts, checkboxes } = pendingBackupRequest;
+        const { allShifts, normalShifts, pendingShifts, checkboxes, onSuccess } = pendingBackupRequest;
         pendingBackupRequest = null;
 
         if (!includeBackup) {
@@ -1616,10 +1802,12 @@
             showMessage('No shifts submitted.', 'info');
             return;
         }
-        submitShiftRequests(shiftsToSubmit.map(s => ({ date: s.date, jobType: s.jobType, location: s.location })), checkboxes);
+        submitShiftRequests(shiftsToSubmit.map(s => ({ date: s.date, jobType: s.jobType, location: s.location })), checkboxes, onSuccess);
     }
 
-    function submitShiftRequests(shifts, checkboxes) {
+    // onSuccess is optional \u2014 lets a caller (e.g. the "Select a shift" calendar modal)
+    // refresh its own view after a successful submit, on top of the usual list refresh.
+    function submitShiftRequests(shifts, checkboxes, onSuccess) {
         showMessage('Sending shift requests...', 'info');
         callBackend('requestShifts', {
             email: currentUser.email,
@@ -1631,6 +1819,7 @@
                 showMessage('\u2713 Shift requests sent!', 'success');
                 checkboxes.forEach(cb => cb.checked = false);
                 loadStaffShifts(); // Refresh to update pending flags
+                if (onSuccess) onSuccess();
             }
         });
     }
