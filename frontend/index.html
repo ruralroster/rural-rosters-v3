@@ -595,20 +595,30 @@
                 <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#000;"></span>Your Roster
             </span>`;
 
+        const hasPrimary = userPrimaryLocations.length > 0;
+        const addBtnStyle = 'padding:8px 14px;font-size:13px;' + (hasPrimary ? '' : 'opacity:0.5;cursor:not-allowed;');
+        const addBtnTitle = hasPrimary ? '' : ' title="Set your Primary workplace in settings prior to adding"';
+
         container.innerHTML = `
             <p style="color:#666;font-size:13px;margin-bottom:12px;">
-                Record shifts you're already rostered to work elsewhere (not through Rural Rosters), so this device can warn you
-                about date conflicts when browsing available shifts. Saved <strong>on this device only</strong> —
-                not shared with rostering officers and will not carry over to other phones or browsers.
+                Record shifts you're already rostered to work elsewhere (not through Rural Rosters).
             </p>
             <div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;">
-                <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openMyRosterModal()">+ Add my roster</button>
+                <button class="btn-primary" style="${addBtnStyle}"${addBtnTitle} onclick="handleAddRemoveMyRosterClick()">Add/Remove My Roster</button>
                 <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openSelectShiftModal()">Select a shift</button>
-                ${hasMyEntries ? '<button class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="clearMyRosterAndRefresh()">Clear all my shifts</button>' : ''}
             </div>
             <div style="margin-bottom:8px;">${legendHtml}</div>
             <div id="myRosterCalendarViewContainer"></div>
-            <div id="myRosterCalendarViewDetail"></div>`;
+            <div id="myRosterCalendarViewDetail"></div>
+            <p style="color:#666;font-size:13px;margin:14px 0;">
+                Rosters added to this calendar allow the app to filter available additional shifts to avoid conflicts with your
+                existing shifts. Any shifts you add of your normal roster are saved <strong>on this device only</strong> and
+                will not be visible to rostering officers, or carry over to other phones or browsers you log in with.
+            </p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                <button class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="downloadMyRosterICS()">Download my roster (.ics)</button>
+                ${hasMyEntries ? '<button class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="clearMyRosterAndRefresh()">Remove all my shifts</button>' : ''}
+            </div>`;
 
         renderMonthCalendar(
             document.getElementById('myRosterCalendarViewContainer'),
@@ -659,6 +669,72 @@
     async function clearMyRosterAndRefresh() {
         await clearMyRosterEntries();
         loadMyRosterListSection();
+    }
+
+    function handleAddRemoveMyRosterClick() {
+        if (userPrimaryLocations.length === 0) {
+            showMessage('Set your Primary workplace in settings prior to adding', 'error');
+            return;
+        }
+        openMyRosterModal();
+    }
+
+    // Builds a single .ics file covering every "my roster" entry (device-local shifts only —
+    // never the additional available shifts), so staff can import their own roster into
+    // Google/iCal before dealing with anything Rural Rosters offers on top of it.
+    function buildMyRosterICS(entries) {
+        const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Rural Rosters//CHHHS//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH'];
+        entries.forEach((e, i) => {
+            const parts = String(e.date).split('/');
+            if (parts.length !== 3) return;
+            const [dd, mm, yyyy] = parts;
+            const dateStr = yyyy + mm.padStart(2, '0') + dd.padStart(2, '0');
+            const uid = `rural-rosters-myroster-${dateStr}-${i}-${Date.now()}@ruralrosters`;
+            lines.push('BEGIN:VEVENT', `UID:${uid}`);
+            if (e.startTime && e.endTime && e.startTime.includes(':') && e.endTime.includes(':')) {
+                const [sh, sm] = e.startTime.split(':');
+                const [eh, em] = e.endTime.split(':');
+                const dtStart = `${dateStr}T${sh.padStart(2, '0')}${sm.padStart(2, '0')}00`;
+                const startMins = parseInt(sh) * 60 + parseInt(sm);
+                const endMins = parseInt(eh) * 60 + parseInt(em);
+                let endDateStr = dateStr;
+                if (endMins <= startMins) {
+                    const d = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+                    d.setDate(d.getDate() + 1);
+                    endDateStr = String(d.getFullYear()) + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+                }
+                const dtEnd = `${endDateStr}T${eh.padStart(2, '0')}${em.padStart(2, '0')}00`;
+                lines.push(`DTSTART:${dtStart}`, `DTEND:${dtEnd}`);
+            } else {
+                lines.push(`DTSTART;VALUE=DATE:${dateStr}`, `DTEND;VALUE=DATE:${dateStr}`);
+            }
+            lines.push(
+                `SUMMARY:${e.jobType} @ ${e.location}`,
+                `LOCATION:${e.location}`,
+                'DESCRIPTION:Rural Rosters — My Roster (this device)',
+                'STATUS:CONFIRMED',
+                'END:VEVENT'
+            );
+        });
+        lines.push('END:VCALENDAR');
+        return lines.join('\r\n');
+    }
+
+    async function downloadMyRosterICS() {
+        const entries = await getMyRosterEntries();
+        if (entries.length === 0) {
+            showMessage('No shifts on your roster to download', 'error');
+            return;
+        }
+        const blob = new Blob([buildMyRosterICS(entries)], { type: 'text/calendar;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'my-roster.ics';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     }
 
     // ============================================================
@@ -724,6 +800,7 @@
     let myRosterSelectedDate = null;
     let myRosterSelectedLocation = null;
     let myRosterEntryDatesCache = new Set();  // ISO dates (YYYY-MM-DD) that already have a myRoster entry
+    let myRosterEntriesCache = [];            // full myRoster entries (id, date, location, jobType, ...), refreshed alongside the dates cache above
 
     async function openMyRosterModal() {
         const today = new Date();
@@ -742,8 +819,14 @@
     }
 
     async function refreshMyRosterEntryDatesCache() {
-        const entries = await getMyRosterEntries();
-        myRosterEntryDatesCache = new Set(entries.map(e => toISODate(e.date)));
+        myRosterEntriesCache = await getMyRosterEntries();
+        myRosterEntryDatesCache = new Set(myRosterEntriesCache.map(e => toISODate(e.date)));
+    }
+
+    async function myRosterRemoveEntryInModal(id) {
+        await removeMyRosterEntry(id);
+        await refreshMyRosterEntryDatesCache();
+        renderMyRosterModalBody();
     }
 
     function renderMyRosterModalBody() {
@@ -754,9 +837,21 @@
             // Restricted to the staff member's own subscribed locations, primary first —
             // not the full getAllLocations list.
             const locations = orderedUserLocations();
+            const entriesForDate = myRosterEntriesCache.filter(e => e.date === myRosterSelectedDate);
+            const existingHtml = entriesForDate.length === 0 ? '' : `
+                <div style="margin-bottom:14px;">
+                    <p style="font-size:12px;color:#666;margin-bottom:6px;">Already on your roster this date:</p>
+                    ${entriesForDate.map(e => `
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:#f9f9f9;border-radius:4px;padding:6px 10px;margin-bottom:6px;font-size:13px;">
+                            <span>${e.jobType} @ ${e.location}</span>
+                            <button onclick="myRosterRemoveEntryInModal(${e.id})" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;" title="Remove">×</button>
+                        </div>`).join('')}
+                </div>`;
             body.innerHTML = `
                 <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="myRosterBackToCalendar(); return false;">&larr; Back</a></p>
-                <p style="margin-bottom:10px;"><strong>${myRosterSelectedDate}</strong> — select a location:</p>
+                <p style="margin-bottom:10px;"><strong>${myRosterSelectedDate}</strong></p>
+                ${existingHtml}
+                <p style="margin-bottom:10px;">${entriesForDate.length === 0 ? 'Select a location:' : 'Add another shift for this date — select a location:'}</p>
                 <div id="myRosterLocationList">${
                     locations.length === 0
                         ? '<p style="color:#999;font-size:13px;">No locations found.</p>'
