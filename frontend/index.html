@@ -592,7 +592,7 @@
             </span>`
         ).join('') + `
             <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
-                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#000;"></span>Your added shifts
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#000;"></span>Your Roster
             </span>`;
 
         container.innerHTML = `
@@ -1143,17 +1143,22 @@
             `;
         } else {
             tabsContainer.innerHTML = `
-                <button class="tab-button active" onclick="switchTab(0, this)">Available Shifts</button>
-                <button class="tab-button" onclick="switchTab(1, this)">Shift Swaps</button>
-                <button class="tab-button" onclick="switchTab(2, this)">Settings</button>
+                <button class="tab-button active" onclick="switchTab(0, this)">Roster Planner</button>
+                <button class="tab-button" onclick="switchTab(1, this)">Available Shifts</button>
+                <button class="tab-button" onclick="switchTab(2, this)">Shift Swaps</button>
+                <button class="tab-button" onclick="switchTab(3, this)">Settings</button>
             `;
             tabsContent.innerHTML = `
                 <div id="tab-0" class="tab-content active">
+                    <h3>Roster Planner</h3>
+                    <div id="availabilityContainer"><p style="color:#999;font-size:13px;">Loading...</p></div>
+                </div>
+                <div id="tab-1" class="tab-content">
                     <h3>Available Shifts</h3>
                     <button class="btn-primary" onclick="requestShifts()" style="margin-bottom: 15px;">Request Selected Shifts</button>
                     <div id="shiftsContainer"></div>
                 </div>
-                <div id="tab-1" class="tab-content">
+                <div id="tab-2" class="tab-content">
                     <h3>Shift Swaps</h3>
                     <h4>Current Shifts Up for Swap (Approved)</h4>
                     <div id="currentSwapsContainer"></div>
@@ -1169,7 +1174,7 @@
                     </div>
                     <button id="offerSwapBtn" class="btn-success" style="margin-top:16px; opacity:0.4; cursor:not-allowed;" disabled onclick="offerShiftForSwap()">Offer Shift for Swap</button>
                 </div>
-                <div id="tab-2" class="tab-content">
+                <div id="tab-3" class="tab-content">
                     <h3>Settings</h3>
                     <div class="settings-section">
                         <h4>Work Location Preferences</h4>
@@ -1189,11 +1194,6 @@
                             <tbody id="locationTableBody"></tbody>
                         </table>
                     </div>
-                    <!-- PHASE 4: device-local roster (used for shift-conflict detection) -->
-                    <div class="settings-section">
-                        <h4>My Roster (this device)</h4>
-                        <div id="availabilityContainer"><p style="color:#999;font-size:13px;">Loading...</p></div>
-                    </div>
                     <div class="settings-section">
                         <h4>AST Qualifications</h4>
                         <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Select your AST qualifications below.</p>
@@ -1205,7 +1205,7 @@
             populateSwapLocations();
             loadLocationCheckboxes();
             loadASTCheckboxes();
-            loadMyRosterListSection(); // PHASE 4
+            loadMyRosterListSection(); // PHASE 4 — now backs the Roster Planner tab, not Settings
         }
     }
 
@@ -1221,8 +1221,9 @@
             if (idx === 2) loadPendingSwaps();
             if (idx === 3) loadOfficerSettings();
         } else {
-            if (idx === 0) loadStaffShifts();
-            if (idx === 1) loadCurrentSwaps();
+            if (idx === 0) loadMyRosterListSection();
+            if (idx === 1) loadStaffShifts();
+            if (idx === 2) loadCurrentSwaps();
         }
     }
 
@@ -1840,7 +1841,8 @@
             getMyRosterEntries()
         ]).then(([shifts, rosterEntries]) => {
             const conflictDates = new Set(rosterEntries.map(e => toISODate(e.date)));
-            renderAllShifts(shifts || [], conflictDates);
+            const sortedShifts = (shifts || []).slice().sort((a, b) => toISODate(a.date).localeCompare(toISODate(b.date)));
+            renderAllShifts(sortedShifts, conflictDates);
         });
     }
 
