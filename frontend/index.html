@@ -481,25 +481,120 @@
         return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
     }
 
+    // Staff's own subscribed locations (userLocations), primary location(s) first.
+    function orderedUserLocations() {
+        const primarySet = new Set(userPrimaryLocations);
+        return [
+            ...userLocations.filter(l => primarySet.has(l)),
+            ...userLocations.filter(l => !primarySet.has(l))
+        ];
+    }
+
+    // Resolves a shift instance (date + the jobType/location's fixed start-end time-of-day) to
+    // real start/end Date objects, handling overnight shifts (end <= start means next-day end —
+    // mirrors backend/ics.js's generateICS). Falls back to a full-day span when no time-of-day
+    // data is configured, so a date-only match still counts as a conflict rather than being missed.
+    function shiftDateRange(dateStr, startTime, endTime) {
+        const parts = String(dateStr).split('/');
+        if (parts.length !== 3) return null;
+        const [dd, mm, yyyy] = parts.map(Number);
+        if (!startTime || !endTime || !startTime.includes(':') || !endTime.includes(':')) {
+            return { start: new Date(yyyy, mm - 1, dd, 0, 0), end: new Date(yyyy, mm - 1, dd, 23, 59) };
+        }
+        const [sh, sm] = startTime.split(':').map(Number);
+        const [eh, em] = endTime.split(':').map(Number);
+        const start = new Date(yyyy, mm - 1, dd, sh, sm);
+        const end = new Date(yyyy, mm - 1, dd, eh, em);
+        if (end <= start) end.setDate(end.getDate() + 1); // overnight shift, e.g. 19:00-07:00
+        return { start, end };
+    }
+
+    // Rest gap between two shift ranges, in hours. 0 (or negative) means they actually overlap.
+    function restGapHours(a, b) {
+        if (!a || !b) return 0;
+        if (a.start < b.end && b.start < a.end) return 0;
+        const gapMs = a.start >= b.end ? (a.start - b.end) : (b.start - a.end);
+        return gapMs / 3600000;
+    }
+
     // ── My Roster section (staff Settings tab) ──
-    
+
+    let myRosterViewCalState = null;             // { year, month } — persists across reloads of this section
+    let myRosterViewShiftsByDate = new Map();     // DD/MM/YYYY -> [{ kind: 'available'|'mine', location, jobType, id? }]
+    let myRosterViewLocationColors = new Map();   // location -> palette colour, ordered by orderedUserLocations()
+    let myRosterViewSelectedDate = null;
+
+    async function refreshMyRosterViewData() {
+        const [availableRaw, myEntries] = await Promise.all([
+            callBackend('getStaffAvailableShifts', { email: currentUser.email }),
+            getMyRosterEntries()
+        ]);
+        const available = Array.isArray(availableRaw) ? availableRaw : [];
+
+        myRosterViewLocationColors = new Map();
+        orderedUserLocations().forEach((loc, i) =>
+            myRosterViewLocationColors.set(loc, CALENDAR_LOCATION_PALETTE[i % CALENDAR_LOCATION_PALETTE.length])
+        );
+
+        // Shift times are keyed by (location, jobType), not per shift instance — resolve each
+        // unique combo once. My-roster entries already recorded their own start/end when added;
+        // reuse those instead of re-fetching.
+        const comboKey = (loc, jt) => loc + '|' + jt;
+        const timesByCombo = new Map();
+        myEntries.forEach(e => { if (e.startTime) timesByCombo.set(comboKey(e.location, e.jobType), { start: e.startTime, end: e.endTime }); });
+        const missingCombos = new Map();
+        available.forEach(s => {
+            const key = comboKey(s.location, s.jobType);
+            if (!timesByCombo.has(key) && !missingCombos.has(key)) missingCombos.set(key, { location: s.location, jobType: s.jobType });
+        });
+        await Promise.all(Array.from(missingCombos.entries()).map(async ([key, { location, jobType }]) => {
+            const times = await callBackend('getShiftTimesForJobType', { location, jobType });
+            timesByCombo.set(key, (times && times.start) ? times : { start: '', end: '' });
+        }));
+
+        const rangeFor = (dateStr, location, jobType) => {
+            const times = timesByCombo.get(comboKey(location, jobType)) || {};
+            return shiftDateRange(dateStr, times.start, times.end);
+        };
+
+        const myRanges = myEntries.map(e => rangeFor(e.date, e.location, e.jobType)).filter(Boolean);
+
+        // Once at least one shift is added, only show available shifts that keep a 12+ hour gap
+        // from every one of them — the rest can't physically be worked. With no shifts added yet,
+        // show everything available (i.e. every shift at the staff member's selected locations).
+        const visibleAvailable = myRanges.length === 0 ? available : available.filter(s => {
+            const range = rangeFor(s.date, s.location, s.jobType);
+            return myRanges.every(myRange => restGapHours(range, myRange) >= 12);
+        });
+
+        myRosterViewShiftsByDate = new Map();
+        const addToMap = (dateStr, item) => {
+            if (!myRosterViewShiftsByDate.has(dateStr)) myRosterViewShiftsByDate.set(dateStr, []);
+            myRosterViewShiftsByDate.get(dateStr).push(item);
+        };
+        visibleAvailable.forEach(s => addToMap(s.date, { kind: 'available', location: s.location, jobType: s.jobType }));
+        myEntries.forEach(e => addToMap(e.date, { kind: 'mine', location: e.location, jobType: e.jobType, id: e.id }));
+    }
+
     async function loadMyRosterListSection() {
         const container = document.getElementById('availabilityContainer');
         if (!container) return;
-        const entries = await getMyRosterEntries();
-        entries.sort((a, b) => toISODate(a.date).localeCompare(toISODate(b.date)));
-        let listHtml = '';
-        if (entries.length === 0) {
-            listHtml = '<p style="color:#999;font-size:13px;">No roster entries added on this device.</p>';
-        } else {
-            listHtml = entries.map(e => `
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f0f0;border-radius:4px;padding:6px 10px;margin-bottom:6px;font-size:13px;">
-                    <span>${e.date} - ${e.jobType} @ ${e.location}</span>
-                    <button onclick="removeMyRosterEntryAndRefresh(${e.id})" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;line-height:1;" title="Remove">\u00d7</button>
-                </div>`
-            ).join('');
-            listHtml += `<div style="margin-top:8px;"><button class="btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="clearMyRosterAndRefresh()">Clear all</button></div>`;
-        }
+        const today = new Date();
+        if (!myRosterViewCalState) myRosterViewCalState = { year: today.getFullYear(), month: today.getMonth() };
+
+        await refreshMyRosterViewData();
+
+        const hasMyEntries = Array.from(myRosterViewShiftsByDate.values()).some(items => items.some(i => i.kind === 'mine'));
+
+        const legendHtml = orderedUserLocations().map(loc => `
+            <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;margin-right:12px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${myRosterViewLocationColors.get(loc) || '#666'};"></span>${loc}
+            </span>`
+        ).join('') + `
+            <span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;">
+                <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#000;"></span>Your added shifts
+            </span>`;
+
         container.innerHTML = `
             <p style="color:#666;font-size:13px;margin-bottom:12px;">
                 Record shifts you're already rostered to work elsewhere (not through Rural Rosters), so this device can warn you
@@ -509,10 +604,53 @@
             <div style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;">
                 <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openMyRosterModal()">+ Add my roster</button>
                 <button class="btn-primary" style="padding:8px 14px;font-size:13px;" onclick="openSelectShiftModal()">Select a shift</button>
+                ${hasMyEntries ? '<button class="btn-secondary" style="padding:8px 14px;font-size:13px;" onclick="clearMyRosterAndRefresh()">Clear all my shifts</button>' : ''}
             </div>
-            <div>${listHtml}</div>`;
+            <div style="margin-bottom:8px;">${legendHtml}</div>
+            <div id="myRosterCalendarViewContainer"></div>
+            <div id="myRosterCalendarViewDetail"></div>`;
+
+        renderMonthCalendar(
+            document.getElementById('myRosterCalendarViewContainer'),
+            myRosterViewCalState,
+            (dateStr) => {
+                const items = myRosterViewShiftsByDate.get(dateStr);
+                if (!items || items.length === 0) return '';
+                const dots = items.slice(0, 4).map(item => {
+                    const color = item.kind === 'mine' ? '#000' : (myRosterViewLocationColors.get(item.location) || '#666');
+                    return `<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${color};margin:1px;"></span>`;
+                }).join('');
+                const extra = items.length > 4 ? `<div style="font-size:9px;color:#666;">+${items.length - 4}</div>` : '';
+                return `<div style="margin-top:2px;">${dots}</div>${extra}`;
+            },
+            (dateStr) => {
+                myRosterViewSelectedDate = dateStr;
+                renderMyRosterViewDetail();
+            }
+        );
+        renderMyRosterViewDetail();
     }
-    
+
+    // Inline day-detail panel below the calendar — the only remaining place to remove an
+    // individual "my roster" entry, now that the section is a calendar rather than a list.
+    function renderMyRosterViewDetail() {
+        const detail = document.getElementById('myRosterCalendarViewDetail');
+        if (!detail) return;
+        const items = myRosterViewSelectedDate ? (myRosterViewShiftsByDate.get(myRosterViewSelectedDate) || []) : [];
+        if (!myRosterViewSelectedDate || items.length === 0) { detail.innerHTML = ''; return; }
+        detail.innerHTML = `
+            <div style="background:#f9f9f9;border-radius:4px;padding:10px 12px;margin-top:10px;font-size:13px;">
+                <strong>${myRosterViewSelectedDate}</strong>
+                ${items.map(item => item.kind === 'mine'
+                    ? `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+                            <span>${item.jobType} @ ${item.location} (your shift)</span>
+                            <button onclick="removeMyRosterEntryAndRefresh(${item.id})" style="background:none;border:none;padding:0;cursor:pointer;color:#dc3545;font-size:14px;" title="Remove">×</button>
+                       </div>`
+                    : `<div style="margin-top:6px;color:#555;">${item.jobType} @ ${item.location} — available (use "Select a shift" to apply)</div>`
+                ).join('')}
+            </div>`;
+    }
+
     async function removeMyRosterEntryAndRefresh(id) {
         await removeMyRosterEntry(id);
         loadMyRosterListSection();
@@ -586,7 +724,6 @@
     let myRosterSelectedDate = null;
     let myRosterSelectedLocation = null;
     let myRosterEntryDatesCache = new Set();  // ISO dates (YYYY-MM-DD) that already have a myRoster entry
-    let myRosterLocationsCache = null;
 
     async function openMyRosterModal() {
         const today = new Date();
@@ -594,7 +731,6 @@
         myRosterStep = 'calendar';
         myRosterSelectedDate = null;
         myRosterSelectedLocation = null;
-        myRosterLocationsCache = null;
         await refreshMyRosterEntryDatesCache();
         renderMyRosterModalBody();
         document.getElementById('myRosterModal').classList.add('active');
@@ -615,28 +751,19 @@
         if (!body) return;
 
         if (myRosterStep === 'location') {
+            // Restricted to the staff member's own subscribed locations, primary first —
+            // not the full getAllLocations list.
+            const locations = orderedUserLocations();
             body.innerHTML = `
                 <p style="font-size:13px;margin-bottom:10px;"><a href="#" onclick="myRosterBackToCalendar(); return false;">&larr; Back</a></p>
                 <p style="margin-bottom:10px;"><strong>${myRosterSelectedDate}</strong> — select a location:</p>
-                <div id="myRosterLocationList"><p style="color:#999;font-size:13px;">Loading...</p></div>`;
-            const listEl = document.getElementById('myRosterLocationList');
-            const populate = (locations) => {
-                if (!locations || locations.length === 0) {
-                    listEl.innerHTML = '<p style="color:#999;font-size:13px;">No locations found.</p>';
-                    return;
-                }
-                listEl.innerHTML = locations.map(loc =>
-                    `<button type="button" class="btn-secondary" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 12px;" onclick="myRosterSelectLocation('${loc}')">${loc}</button>`
-                ).join('');
-            };
-            if (myRosterLocationsCache) {
-                populate(myRosterLocationsCache);
-            } else {
-                callBackend('getAllLocations', {}).then(locations => {
-                    myRosterLocationsCache = locations || [];
-                    populate(myRosterLocationsCache);
-                });
-            }
+                <div id="myRosterLocationList">${
+                    locations.length === 0
+                        ? '<p style="color:#999;font-size:13px;">No locations found.</p>'
+                        : locations.map(loc =>
+                            `<button type="button" class="btn-secondary" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:8px 12px;" onclick="myRosterSelectLocation('${loc}')">${loc}</button>`
+                          ).join('')
+                }</div>`;
             return;
         }
 
