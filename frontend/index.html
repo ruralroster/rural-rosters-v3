@@ -1178,7 +1178,7 @@
                     <h3>Settings</h3>
                     <div class="settings-section">
                         <h4>Work Location Preferences</h4>
-                        <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+                        <table id="locationPrefsTable" style="border-collapse:collapse;margin-top:8px;">
                             <thead>
                                 <tr>
                                     <th style="width:40px;text-align:center;padding:6px 4px;font-size:13px;font-weight:600;color:#2c6e6a;">Primary Workplace</th>
@@ -2178,6 +2178,15 @@
     function renderLocationTable(locations) {
         const tbody = document.getElementById('locationTableBody');
         if (!tbody) return;
+
+        // Table is sized to content (3 columns: primary radio, name, cover checkbox) rather
+        // than stretching full-width — approximated as 3x the longest location name's length.
+        const table = document.getElementById('locationPrefsTable');
+        if (table && locations.length > 0) {
+            const maxLen = Math.max(...locations.map(l => l.length));
+            table.style.width = `calc(${maxLen * 3}ch + 16px)`;
+        }
+
         let html = '';
         locations.forEach((loc, i) => {
             const coverChecked = userLocations.includes(loc) ? ' checked' : '';
