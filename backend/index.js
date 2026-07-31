@@ -69,6 +69,7 @@ const server = http.createServer((req, res) => {
         case 'getShiftTypesForOfficer':    result = await vacancies.getShiftTypesForOfficer(params.email); break;
         case 'getAllLocations':              result = await users.getAllLocations(); break;
         case 'savePushSubscription':       result = await push.savePushSubscription(params.email, params.subscription); break; // PHASE 3
+        case 'deactivatePushSubscription': result = await push.deactivatePushSubscription(params.email, params.endpoint); break; // PHASE 3
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);

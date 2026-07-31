@@ -123,4 +123,41 @@ async function sendPushNotification(email, title, body, url) {
 }
 
 
-module.exports = { savePushSubscription, sendPushNotification };
+// Marks a single subscription row inactive by endpoint match — used when a
+// user explicitly turns notifications off via the Settings toggle, so the
+// stored subscription doesn't sit there as dead-but-active data.
+async function deactivatePushSubscription(email, endpoint) {
+  try {
+    if (!email || !endpoint) return { error: 'Missing email or endpoint' };
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Push Subscriptions!A2:E'
+    });
+    const rows = result.data.values || [];
+    for (let i = 0; i < rows.length; i++) {
+      const rowEmail = String(rows[i][0] || '').toLowerCase().trim();
+      if (rowEmail !== normalizedEmail) continue;
+      let sub;
+      try { sub = JSON.parse(rows[i][1] || '{}'); } catch (e) { continue; }
+      if (sub.endpoint === endpoint) {
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Push Subscriptions!E${i + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [['FALSE']] }
+        });
+        console.log(`deactivatePushSubscription: marked inactive for ${normalizedEmail}`);
+        return { success: true };
+      }
+    }
+    return { success: true, message: 'No matching subscription found' };
+  } catch (err) {
+    console.error('deactivatePushSubscription error:', err);
+    return { error: err.toString() };
+  }
+}
+
+
+module.exports = { savePushSubscription, sendPushNotification, deactivatePushSubscription };

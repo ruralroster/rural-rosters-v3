@@ -402,6 +402,90 @@
         });
     }
     
+    // Reads actual browser/subscription state rather than assuming it from
+    // whether the banner was dismissed — dismissal and subscription are independent.
+    async function getPushSubscriptionState() {
+        if (!pushSupported() || !VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY.startsWith('REPLACE')) {
+            return { supported: false, permission: 'unsupported', subscribed: false };
+        }
+        const permission = Notification.permission;
+        let subscribed = false;
+        if (permission === 'granted') {
+            try {
+                const reg = await navigator.serviceWorker.ready;
+                const sub = await reg.pushManager.getSubscription();
+                subscribed = !!sub;
+            } catch (e) { subscribed = false; }
+        }
+        return { supported: true, permission, subscribed };
+    }
+
+    // Persistent Settings-tab entry point — the one-time banner is still the
+    // first prompt, but this is the way back in after it's been dismissed.
+    async function loadNotificationToggle() {
+        const toggle = document.getElementById('notifyToggle');
+        const status = document.getElementById('notifyToggleStatus');
+        if (!toggle || !status) return;
+
+        const state = await getPushSubscriptionState();
+        if (!state.supported) {
+            toggle.checked = false;
+            toggle.disabled = true;
+            status.textContent = 'Push notifications are not supported on this device or browser.';
+            return;
+        }
+        if (state.permission === 'denied') {
+            toggle.checked = false;
+            toggle.disabled = true;
+            status.textContent = 'Notifications are blocked for this site — enable them in your browser settings to turn this on.';
+            return;
+        }
+        toggle.disabled = false;
+        toggle.checked = state.subscribed;
+        status.textContent = state.subscribed
+            ? 'Notifications are on for this device.'
+            : 'Notifications are off for this device.';
+    }
+
+    async function onNotifyToggleChange(checked) {
+        const toggle = document.getElementById('notifyToggle');
+        const status = document.getElementById('notifyToggleStatus');
+        if (toggle) toggle.disabled = true;
+        if (status) status.textContent = 'Updating...';
+
+        try {
+            if (checked) {
+                const perm = await Notification.requestPermission();
+                if (perm !== 'granted') {
+                    showMessage('Notifications not enabled — allow notifications in your browser settings to turn this on.', 'info');
+                    return;
+                }
+                await subscribeToPush();
+                showMessage('✓ Notifications enabled on this device', 'success');
+            } else {
+                await unsubscribeFromPush();
+                showMessage('Notifications turned off on this device', 'info');
+            }
+        } catch (err) {
+            console.error('onNotifyToggleChange error:', err);
+            showMessage('Could not update notification setting', 'error');
+        } finally {
+            await loadNotificationToggle();
+        }
+    }
+
+    async function unsubscribeFromPush() {
+        if (!pushSupported()) return;
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.getSubscription();
+        if (!sub) return;
+        const endpoint = sub.endpoint;
+        await sub.unsubscribe();
+        if (currentUser) {
+            await callBackend('deactivatePushSubscription', { email: currentUser.email, endpoint });
+        }
+    }
+
     function urlBase64ToUint8Array(base64String) {
         const padding = '='.repeat((4 - base64String.length % 4) % 4);
         const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -1294,6 +1378,14 @@
                         <p style="color: #666; font-size: 13px; margin-bottom: 12px;">Select your AST qualifications below.</p>
                         <div id="astList"></div>
                     </div>
+                    <div class="settings-section">
+                        <h4>Notifications</h4>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <input type="checkbox" id="notifyToggle" onchange="onNotifyToggleChange(this.checked)">
+                            <label for="notifyToggle" style="margin-bottom:0;">Enable push notifications on this device</label>
+                        </div>
+                        <p id="notifyToggleStatus" style="color:#666;font-size:12px;margin-top:6px;">Checking current status...</p>
+                    </div>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
                 </div>
             `;
@@ -1301,6 +1393,7 @@
             loadLocationCheckboxes();
             loadASTCheckboxes();
             loadMyRosterListSection(); // PHASE 4 — now backs the Roster Planner tab, not Settings
+            loadNotificationToggle();
         }
     }
 
