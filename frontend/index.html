@@ -352,8 +352,6 @@
             return;
         }
         if (Notification.permission === 'granted') {
-            // Re-sync subscription silently (device may have a new endpoint)
-            subscribeToPush().catch(() => {});
             banner.style.display = 'none';
             return;
         }
