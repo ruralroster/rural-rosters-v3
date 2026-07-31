@@ -1,9 +1,18 @@
+const bcrypt = require('bcryptjs');
 const { sheets } = require('./clients');
 const { SHEET_ID } = require('./config');
+
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$/;
+const BCRYPT_SALT_ROUNDS = 10;
 
 // Fix: immediate return on first email+password match — no collect-then-prefer logic.
 // Rule: a user with two rows (Staff + Officer) must have a unique password per row.
 // Staff rows should appear before Officer rows in the sheet as a safe default.
+//
+// Password column holds either a bcrypt hash ($2a$/$2b$/$2y$ prefix) or a legacy
+// plaintext value. A successful legacy match is migrated to a bcrypt hash in place,
+// on the spot — this is the only path that writes password values, so it's also the
+// only migration path; there is no separate new-user write path in this codebase yet.
 async function checkUserExists(email, password) {
   try {
     const result = await sheets.spreadsheets.values.get({
@@ -17,13 +26,36 @@ async function checkUserExists(email, password) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowEmail = String(row[0] || '').toLowerCase().trim();
-      const rowPassword = String(row[4] || '').trim();
       const rowRole = String(row[3] || '').trim();
 
-      console.log(`Row ${i}: email="${rowEmail}" role="${rowRole}" passwordMatch=${rowPassword === password}`);
+      if (rowEmail !== normalizedEmail) continue;
 
-      if (rowEmail === normalizedEmail && rowPassword === password) {
+      const rowPassword = String(row[4] || '').trim();
+      const isHashed = BCRYPT_HASH_PATTERN.test(rowPassword);
+      const passwordMatch = isHashed
+        ? await bcrypt.compare(password, rowPassword)
+        : rowPassword === password;
+
+      console.log(`Row ${i}: email="${rowEmail}" role="${rowRole}" passwordMatch=${passwordMatch}`);
+
+      if (passwordMatch) {
         console.log(`Login match at row ${i}: ${normalizedEmail} as ${rowRole}`);
+
+        if (!isHashed) {
+          try {
+            const newHash = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
+            await sheets.spreadsheets.values.update({
+              spreadsheetId: SHEET_ID,
+              range: `Users!E${i + 2}`,
+              valueInputOption: 'RAW',
+              resource: { values: [[newHash]] }
+            });
+            console.log(`Row ${i}: migrated legacy plaintext password to bcrypt hash`);
+          } catch (migrateErr) {
+            console.error(`Row ${i}: password migration failed:`, migrateErr.message);
+          }
+        }
+
         return {
           email: row[0],
           name: row[1],
