@@ -62,6 +62,8 @@ const server = http.createServer((req, res) => {
         case 'updateUserPrimaryLocations':      result = await users.updateUserPrimaryLocations(params.email, params.primaryLocations); break;
         case 'updateUserAST':             result = await users.updateUserAST(params.email, params.astQuals); break;
         case 'changeUserPassword':        result = await users.changeUserPassword(params.email, params.currentPassword, params.newPassword); break;
+        case 'requestPasswordReset':      result = await users.requestPasswordReset(params.email); break;
+        case 'completePasswordReset':     result = await users.completePasswordReset(params.token, params.newPassword); break;
         case 'countPendingRequests':      result = await requests.countPendingRequests(params.email); break;
         case 'getPendingCounts':           result = await requests.getPendingCounts(params.email); break;
         case 'addShiftType':               result = await vacancies.addShiftType(params.officerEmail, params.location, params.jobType, params.startTime, params.endTime, params.astRequired); break;

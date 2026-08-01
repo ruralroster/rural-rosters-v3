@@ -1,6 +1,7 @@
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-const { sheets } = require('./clients');
-const { SHEET_ID } = require('./config');
+const { sheets, transporter } = require('./clients');
+const { SHEET_ID, FRONTEND_URL, GMAIL_USER } = require('./config');
 
 const BCRYPT_HASH_PATTERN = /^\$2[aby]\$/;
 const BCRYPT_SALT_ROUNDS = 10;
@@ -244,6 +245,150 @@ async function changeUserPassword(email, currentPassword, newPassword) {
   }
 }
 
+// Password Resets sheet columns: A email | B token | C expiry (ISO timestamp) | D used TRUE/FALSE
+const RESET_TOKEN_TTL_MS = 30 * 60 * 1000;
+const GENERIC_RESET_RESPONSE = { success: true, message: 'If that email is registered, a reset link has been sent.' };
+const GENERIC_RESET_ERROR = { error: 'This reset link is invalid or has expired. Please request a new one.' };
+
+// Always resolves to the same generic response whether or not the email
+// exists, and even on internal error — same no-enumeration stance as the
+// rest of this flow, applied consistently rather than just at the "not
+// found" branch.
+async function requestPasswordReset(email) {
+  try {
+    const normalizedEmail = String(email || '').toLowerCase().trim();
+    if (!normalizedEmail) return GENERIC_RESET_RESPONSE;
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:A'
+    });
+    const rows = result.data.values || [];
+    const userExists = rows.some(row => String(row[0] || '').toLowerCase().trim() === normalizedEmail);
+    if (!userExists) return GENERIC_RESET_RESPONSE;
+
+    // Invalidate any prior outstanding tokens for this email before issuing
+    // a new one — only the newest request should ever be valid at a time.
+    // Same used-flag string comparison as completePasswordReset's check.
+    const existingResets = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Password Resets!A2:D'
+    });
+    const resetRows = existingResets.data.values || [];
+    for (let i = 0; i < resetRows.length; i++) {
+      const row = resetRows[i];
+      const rowEmail = String(row[0] || '').toLowerCase().trim();
+      const used = String(row[3] || '').toUpperCase() === 'TRUE';
+      if (rowEmail !== normalizedEmail || used) continue;
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `Password Resets!D${i + 2}`,
+        valueInputOption: 'RAW',
+        resource: { values: [['TRUE']] }
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiry = new Date(Date.now() + RESET_TOKEN_TTL_MS).toISOString();
+
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID,
+      range: 'Password Resets!A2:D',
+      valueInputOption: 'RAW',
+      resource: { values: [[normalizedEmail, token, expiry, 'FALSE']] }
+    });
+
+    const resetLink = `${FRONTEND_URL}?reset=${token}`;
+    try {
+      await transporter.sendMail({
+        from: GMAIL_USER,
+        to: normalizedEmail,
+        subject: '[Rural Rosters] Password reset request',
+        html: `<p>Dear User,</p>
+<p>A password reset was requested for your Rural Rosters account. This link expires in 30 minutes:</p>
+<p><a href="${resetLink}" style="background: #2c3e50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset your password</a></p>
+<p>If you did not request this, you can safely ignore this email — your password will not be changed.</p>
+<p>Many Thanks,<br><strong>Rural Rosters Support Team</strong></p>`
+      });
+      console.log(`requestPasswordReset: email sent to ${normalizedEmail}`);
+    } catch (emailErr) {
+      console.error('requestPasswordReset email error:', emailErr.message);
+    }
+
+    return GENERIC_RESET_RESPONSE;
+  } catch (err) {
+    console.error('requestPasswordReset error:', err);
+    return GENERIC_RESET_RESPONSE;
+  }
+}
+
+// Validates token exists / not expired / not used, then hashes newPassword
+// and writes it the same way changeUserPassword does. Unlike changeUserPassword,
+// there's no currentPassword here to disambiguate which row belongs to a user
+// with two rows (Staff + Officer) — the user forgot their password, so they
+// can't prove which row is "theirs" by matching it. Written to every row
+// matching the email instead, so a two-role user isn't left locked out of
+// one role after resetting the other.
+async function completePasswordReset(token, newPassword) {
+  try {
+    if (!token || !newPassword) return GENERIC_RESET_ERROR;
+    const trimmedToken = String(token).trim();
+
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Password Resets!A2:D'
+    });
+    const rows = result.data.values || [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (String(row[1] || '').trim() !== trimmedToken) continue;
+
+      const used = String(row[3] || '').toUpperCase() === 'TRUE';
+      const expiry = new Date(String(row[2] || '').trim());
+      const expired = isNaN(expiry.getTime()) || expiry.getTime() < Date.now();
+      if (used || expired) return GENERIC_RESET_ERROR;
+
+      const email = String(row[0] || '').toLowerCase().trim();
+      const usersResult = await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID,
+        range: 'Users!A2:H'
+      });
+      const userRows = usersResult.data.values || [];
+      const newHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+      let updatedRows = 0;
+
+      for (let j = 0; j < userRows.length; j++) {
+        if (String(userRows[j][0] || '').toLowerCase().trim() !== email) continue;
+        await sheets.spreadsheets.values.update({
+          spreadsheetId: SHEET_ID,
+          range: `Users!E${j + 2}`,
+          valueInputOption: 'RAW',
+          resource: { values: [[newHash]] }
+        });
+        updatedRows++;
+      }
+
+      if (updatedRows === 0) return GENERIC_RESET_ERROR;
+
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `Password Resets!D${i + 2}`,
+        valueInputOption: 'RAW',
+        resource: { values: [['TRUE']] }
+      });
+
+      console.log(`completePasswordReset: password reset for ${email} (${updatedRows} row(s) updated)`);
+      return { success: true };
+    }
+
+    return GENERIC_RESET_ERROR;
+  } catch (err) {
+    console.error('completePasswordReset error:', err);
+    return GENERIC_RESET_ERROR;
+  }
+}
+
 async function updateUserAST(email, astQuals) {
   try {
     const normalizedEmail = email.toLowerCase().trim();
@@ -316,5 +461,7 @@ module.exports = {
   updateUserPrimaryLocations,
   updateUserAST,
   changeUserPassword,
+  requestPasswordReset,
+  completePasswordReset,
   getStaffWithLocationSubscribed
 };

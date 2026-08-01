@@ -104,8 +104,21 @@
         <p id="versionDisplay" style="color: #888; font-size: 13px; margin-bottom: 4px; margin-top: 4px;"></p>
         <input type="email" id="emailInput" class="login-input" placeholder="Email address" oninput="clearLoginError()">
         <input type="password" id="passwordInput" class="login-input" placeholder="Password" oninput="clearLoginError()" onkeypress="if(event.key==='Enter') loginWithEmail()">
+        <p style="text-align:right;margin:6px 0 0;font-size:13px;"><a href="#" onclick="openForgotPasswordModal(); return false;">Forgot password?</a></p>
         <div id="loginError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
+        <div id="loginNotice" style="display:none; background:#d4edda; color:#155724; border:1px solid #c3e6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
         <button class="btn-primary login-button" onclick="loginWithEmail()">Login</button>
+    </div>
+</div>
+
+<div id="resetPasswordScreen" class="login-container" style="display:none;">
+    <div class="login-card">
+        <h2>Set New Password</h2>
+        <p style="color:#888;font-size:13px;margin-bottom:16px;">Choose a new password for your Rural Rosters account.</p>
+        <input type="password" id="resetNewPasswordInput" class="login-input" placeholder="New password" autocomplete="new-password">
+        <input type="password" id="resetConfirmPasswordInput" class="login-input" placeholder="Confirm new password" autocomplete="new-password" onkeypress="if(event.key==='Enter') submitNewPassword()">
+        <div id="resetPasswordError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
+        <button class="btn-primary login-button" onclick="submitNewPassword()">Set New Password</button>
     </div>
 </div>
 
@@ -132,6 +145,25 @@
         <div id="pendingBanner" style="display:none;"></div>
         <div class="tabs" id="tabsContainer"></div>
         <div id="tabsContent"></div>
+    </div>
+</div>
+
+<div id="forgotPasswordModal" class="modal">
+    <div class="modal-content" style="max-width: 420px;">
+        <div class="modal-header">
+            <h3>Reset Password</h3>
+            <button class="info-icon" onclick="toggleModalHelp('forgotPasswordHelp')" title="What is this?">i</button>
+        </div>
+        <div id="forgotPasswordHelp" class="modal-help">
+            Enter your account email and we'll send a link to reset your password. The link expires in 30 minutes. You'll see the same confirmation whether or not that email is registered.
+        </div>
+        <div class="form-group"><label>Email Address</label><input type="email" id="forgotPasswordEmail" autocomplete="email" onkeypress="if(event.key==='Enter') submitForgotPassword()"></div>
+        <div id="forgotPasswordError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+        <div id="forgotPasswordSuccess" style="display:none;background:#d4edda;color:#155724;border:1px solid #c3e6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+        <div class="modal-buttons">
+            <button class="btn-primary" onclick="submitForgotPassword()">Send Reset Link</button>
+            <button class="btn-secondary" onclick="closeForgotPasswordModal()">Cancel</button>
+        </div>
     </div>
 </div>
 
@@ -1201,9 +1233,17 @@
     let pendingFortnightSwap = null;
     let pendingProposal = null;
     let pendingDenyProposal = null;
+    let pendingResetToken = null;
 
     // Set version display and image on load
     window.addEventListener('load', function() {
+        const resetToken = new URLSearchParams(window.location.search).get('reset');
+        if (resetToken) {
+            pendingResetToken = resetToken;
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('resetPasswordScreen').style.display = 'flex';
+        }
+
         const vd = document.getElementById('versionDisplay');
         if (vd) vd.textContent = VERSION_NAME + ' Version — ' + VERSION_STAGE;
 
@@ -1246,6 +1286,66 @@
     function clearLoginError() {
         const el = document.getElementById('loginError');
         if (el) { el.style.display = 'none'; el.textContent = ''; }
+        const notice = document.getElementById('loginNotice');
+        if (notice) { notice.style.display = 'none'; notice.textContent = ''; }
+    }
+
+    function openForgotPasswordModal() {
+        document.getElementById('forgotPasswordEmail').value = document.getElementById('emailInput').value.trim();
+        document.getElementById('forgotPasswordError').style.display = 'none';
+        document.getElementById('forgotPasswordSuccess').style.display = 'none';
+        document.getElementById('forgotPasswordModal').classList.add('active');
+    }
+
+    function closeForgotPasswordModal() {
+        document.getElementById('forgotPasswordModal').classList.remove('active');
+    }
+
+    function submitForgotPassword() {
+        const email = document.getElementById('forgotPasswordEmail').value.trim().toLowerCase();
+        const errEl = document.getElementById('forgotPasswordError');
+        const successEl = document.getElementById('forgotPasswordSuccess');
+        errEl.style.display = 'none';
+        successEl.style.display = 'none';
+
+        if (!email) { errEl.textContent = 'Please enter your email address'; errEl.style.display = 'block'; return; }
+
+        callBackend('requestPasswordReset', { email }).then(result => {
+            if (result && result.error) {
+                errEl.textContent = result.error;
+                errEl.style.display = 'block';
+                return;
+            }
+            successEl.textContent = 'If that email is registered, a reset link has been sent. Check your inbox.';
+            successEl.style.display = 'block';
+        });
+    }
+
+    function showResetError(msg) {
+        const el = document.getElementById('resetPasswordError');
+        if (el) { el.textContent = msg; el.style.display = 'block'; }
+    }
+
+    function submitNewPassword() {
+        const newPassword = document.getElementById('resetNewPasswordInput').value;
+        const confirmPassword = document.getElementById('resetConfirmPasswordInput').value;
+        document.getElementById('resetPasswordError').style.display = 'none';
+
+        if (!newPassword) { showResetError('Please enter a new password'); return; }
+        if (newPassword !== confirmPassword) { showResetError('New password and confirmation do not match'); return; }
+
+        callBackend('completePasswordReset', { token: pendingResetToken, newPassword }).then(result => {
+            if (result && result.error) {
+                showResetError(result.error);
+                return;
+            }
+            pendingResetToken = null;
+            window.history.replaceState({}, document.title, window.location.pathname);
+            document.getElementById('resetPasswordScreen').style.display = 'none';
+            document.getElementById('loginScreen').style.display = 'flex';
+            document.getElementById('loginNotice').textContent = 'Password reset — please log in with your new password.';
+            document.getElementById('loginNotice').style.display = 'block';
+        });
     }
 
     function loginWithEmail() {
