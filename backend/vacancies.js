@@ -1,12 +1,23 @@
 const { sheets } = require('./clients');
 const { SHEET_ID, FRONTEND_URL } = require('./config');
-const { formatDate, normaliseDate } = require('./utils');
+const { formatDate, normaliseDate, BRISBANE_TZ } = require('./utils');
 const { getOfficerLocations, getStaffLocations, getStaffWithLocationSubscribed } = require('./users');
 const { sendPushNotification } = require('./push');
 
 // ============================================================================
 // VACANCY FUNCTIONS
 // ============================================================================
+
+// Returns true if dateStr (any format normaliseDate accepts) is today or
+// later. Reuses the DD/MM/YYYY -> YYYY-MM-DD reverse-join pattern already
+// used for date sorting (see requests.js), compared as strings so no
+// Date/timezone parsing is involved. "Today" is Brisbane's calendar date,
+// same TZ brisTime() uses, not the server's local time (Cloud Run runs UTC).
+function isTodayOrLater(dateStr) {
+  const iso = normaliseDate(dateStr).split('/').reverse().join('-');
+  const todayIso = new Date().toLocaleDateString('en-CA', { timeZone: BRISBANE_TZ });
+  return iso >= todayIso;
+}
 
 async function getJobTypesForLocation(location) {
   try {
@@ -50,7 +61,7 @@ async function getOfficerVacancies(email) {
         });
         const rows = result.data.values || [];
         for (let row of rows) {
-          if (row[0] && row[1]) {
+          if (row[0] && row[1] && isTodayOrLater(formatDate(row[0]))) {
             allVacancies.push({ date: formatDate(row[0]), jobType: row[1], location: row[2] });
           }
         }
@@ -58,6 +69,14 @@ async function getOfficerVacancies(email) {
         console.log(`getOfficerVacancies: skipping ${location} - ${locErr.message}`);
       }
     }
+
+    // Sort ascending (nearest to farthest) — same normaliseDate
+    // reverse-join-to-ISO string comparison isTodayOrLater uses.
+    allVacancies.sort((a, b) => {
+      const aIso = normaliseDate(a.date).split('/').reverse().join('-');
+      const bIso = normaliseDate(b.date).split('/').reverse().join('-');
+      return aIso < bIso ? -1 : aIso > bIso ? 1 : 0;
+    });
 
     return allVacancies;
   } catch (err) {
@@ -92,7 +111,7 @@ async function getStaffAvailableShifts(email) {
         const rows = result.data.values || [];
         console.log(`Found ${rows.length} shifts in ${location}`);
         for (let row of rows) {
-          if (row[0] && row[1]) {
+          if (row[0] && row[1] && isTodayOrLater(formatDate(row[0]))) {
             allShifts.push({ date: formatDate(row[0]), jobType: row[1], location: row[2] });
           }
         }

@@ -40,4 +40,4 @@ function normaliseDate(dateStr) {
 }
 
 
-module.exports = { brisTime, formatDate, normaliseDate, formatASTLabel, SIGN_OFF };
+module.exports = { BRISBANE_TZ, brisTime, formatDate, normaliseDate, formatASTLabel, SIGN_OFF };
