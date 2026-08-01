@@ -1316,7 +1316,18 @@
                 </div>
                 <div id="tab-1" class="tab-content"><h3>Shift Cover Approvals</h3><div id="approvalsContainer"></div></div>
                 <div id="tab-2" class="tab-content"><h3>Pending Swaps</h3><div id="swapsContainer"></div></div>
-                <div id="tab-3" class="tab-content"><h3>Settings</h3><div id="officerSettingsContainer"></div></div>
+                <div id="tab-3" class="tab-content">
+                    <h3>Settings</h3>
+                    <div id="officerSettingsContainer"></div>
+                    <div class="settings-section" style="margin-top:30px;">
+                        <h4>Change Password</h4>
+                        <div class="form-group"><label>Current Password</label><input type="password" id="currentPasswordInput" autocomplete="current-password"></div>
+                        <div class="form-group"><label>New Password</label><input type="password" id="newPasswordInput" autocomplete="new-password"></div>
+                        <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirmPasswordInput" autocomplete="new-password"></div>
+                        <div id="changePasswordError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+                        <button class="btn-primary" onclick="changePassword()">Change Password</button>
+                    </div>
+                </div>
             `;
         } else {
             tabsContainer.innerHTML = `
@@ -1385,6 +1396,14 @@
                         <p id="notifyToggleStatus" style="color:#666;font-size:12px;margin-top:6px;">Checking current status...</p>
                     </div>
                     <button class="btn-primary" onclick="saveSettings()">Save Settings</button>
+                    <div class="settings-section" style="margin-top:30px;">
+                        <h4>Change Password</h4>
+                        <div class="form-group"><label>Current Password</label><input type="password" id="currentPasswordInput" autocomplete="current-password"></div>
+                        <div class="form-group"><label>New Password</label><input type="password" id="newPasswordInput" autocomplete="new-password"></div>
+                        <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirmPasswordInput" autocomplete="new-password"></div>
+                        <div id="changePasswordError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+                        <button class="btn-primary" onclick="changePassword()">Change Password</button>
+                    </div>
                 </div>
             `;
             populateSwapLocations();
@@ -2484,6 +2503,36 @@
                         populateSwapLocations();
                     }
                 });
+            }
+        });
+    }
+
+    // Shared by both Staff and Officer Settings tabs — only one of those
+    // templates is ever in the DOM at a time, so the element IDs don't collide.
+    function changePassword() {
+        const currentPassword = document.getElementById('currentPasswordInput').value;
+        const newPassword = document.getElementById('newPasswordInput').value;
+        const confirmPassword = document.getElementById('confirmPasswordInput').value;
+        const errEl = document.getElementById('changePasswordError');
+
+        if (!currentPassword) { errEl.textContent = 'Please enter your current password'; errEl.style.display = 'block'; return; }
+        if (!newPassword)     { errEl.textContent = 'Please enter a new password'; errEl.style.display = 'block'; return; }
+        if (newPassword !== confirmPassword) { errEl.textContent = 'New password and confirmation do not match'; errEl.style.display = 'block'; return; }
+        errEl.style.display = 'none';
+
+        callBackend('changeUserPassword', {
+            email: currentUser.email,
+            currentPassword,
+            newPassword
+        }).then(result => {
+            if (result.error) {
+                errEl.textContent = result.error;
+                errEl.style.display = 'block';
+            } else {
+                document.getElementById('currentPasswordInput').value = '';
+                document.getElementById('newPasswordInput').value = '';
+                document.getElementById('confirmPasswordInput').value = '';
+                showMessage('✓ Password changed', 'success');
             }
         });
     }

@@ -194,6 +194,56 @@ async function updateUserPrimaryLocations(email, primaryLocations) {
   }
 }
 
+// Same hash-or-plaintext detection as checkUserExists — an unmigrated row
+// can still change its password, and doing so migrates it to a hash in the
+// same step, since newPassword is always written as a fresh bcrypt hash
+// regardless of what the old value's format was.
+// A user with two rows (Staff + Officer) has a unique password per row;
+// currentPassword identifies which row is being changed, same as login does.
+async function changeUserPassword(email, currentPassword, newPassword) {
+  try {
+    if (!currentPassword || !newPassword) return { error: 'Current and new password are required' };
+
+    const normalizedEmail = String(email).toLowerCase().trim();
+    const result = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID,
+      range: 'Users!A2:H'
+    });
+    const rows = result.data.values || [];
+    let emailFound = false;
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowEmail = String(row[0] || '').toLowerCase().trim();
+      if (rowEmail !== normalizedEmail) continue;
+      emailFound = true;
+
+      const rowPassword = String(row[4] || '').trim();
+      const isHashed = BCRYPT_HASH_PATTERN.test(rowPassword);
+      const currentMatches = isHashed
+        ? await bcrypt.compare(currentPassword, rowPassword)
+        : rowPassword === currentPassword;
+
+      if (!currentMatches) continue;
+
+      const newHash = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID,
+        range: `Users!E${i + 2}`,
+        valueInputOption: 'RAW',
+        resource: { values: [[newHash]] }
+      });
+      console.log(`changeUserPassword: password updated for row ${i}`);
+      return { success: true };
+    }
+
+    return { error: emailFound ? 'Current password is incorrect' : 'User not found' };
+  } catch (err) {
+    console.error('changeUserPassword error:', err);
+    return { error: err.toString() };
+  }
+}
+
 async function updateUserAST(email, astQuals) {
   try {
     const normalizedEmail = email.toLowerCase().trim();
@@ -265,5 +315,6 @@ module.exports = {
   updateUserLocations,
   updateUserPrimaryLocations,
   updateUserAST,
+  changeUserPassword,
   getStaffWithLocationSubscribed
 };
