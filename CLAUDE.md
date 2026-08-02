@@ -21,12 +21,13 @@ you're editing, stop and flag it rather than leaving it or committing it.
 
 ## Structure
 - frontend/index.html — single-file HTML/JS frontend
-- backend/index.js — Node.js backend (Google Sheets as the data store,
-  Cloud Run deployment target)
+- backend/ — Node.js backend (Google Sheets as the data store, Cloud Run
+  deployment target), modularized by domain: index.js (router), config.js,
+  clients.js, utils.js, ics.js, push.js, users.js, vacancies.js, requests.js,
+  marketplace.js
 
 ## Priorities (see docs/ for full detail once added)
-1. Modularise backend/index.js into separate files by domain.
-2. Real authentication (hashed passwords, not plaintext comparison).
-3. Migrate off Google Sheets to a proper database — this one has a live
+1. Real authentication (hashed passwords, not plaintext comparison).
+2. Migrate off Google Sheets to a proper database — this one has a live
    privacy dimension (CHHHS staff data), not just tech debt, treat it as
    a real priority.
