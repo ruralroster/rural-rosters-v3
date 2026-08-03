@@ -122,6 +122,16 @@
     </div>
 </div>
 
+<div id="totpLoginScreen" class="login-container" style="display:none;">
+    <div class="login-card">
+        <h2>Verification Required</h2>
+        <p style="color:#888;font-size:13px;margin-bottom:16px;">Enter the 6-digit code from your authenticator app, or one of your recovery codes.</p>
+        <input type="text" id="totpLoginCodeInput" class="login-input" placeholder="Code" autocomplete="one-time-code" onkeypress="if(event.key==='Enter') submitTotpLogin()">
+        <div id="totpLoginError" style="display:none; background:#f8d7da; color:#721c24; border:1px solid #f5c6cb; border-radius:4px; padding:10px 14px; margin-top:12px; font-size:14px;"></div>
+        <button class="btn-primary login-button" onclick="submitTotpLogin()">Verify</button>
+    </div>
+</div>
+
 <div id="mainDashboard" class="dashboard">
     <div class="container">
         <header>
@@ -1234,6 +1244,7 @@
     let pendingProposal = null;
     let pendingDenyProposal = null;
     let pendingResetToken = null;
+    let pendingTotpToken = null;
 
     // Set version display and image on load
     window.addEventListener('load', function() {
@@ -1362,14 +1373,51 @@
                 showLoginError(user.error);
                 return;
             }
+            if (user && user.totpRequired) {
+                pendingTotpToken = user.token;
+                document.getElementById('loginScreen').style.display = 'none';
+                document.getElementById('totpLoginScreen').style.display = 'flex';
+                document.getElementById('totpLoginCodeInput').value = '';
+                document.getElementById('totpLoginCodeInput').focus();
+                return;
+            }
             if (user) {
-                currentUser = { email: user.email, name: user.name };
-                userRole = user.role;
-                userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
-                // Fix: actually load and store AST quals from login response
-                userQuals = user.astQuals ? user.astQuals.split(',').map(q => q.trim()) : ['Emergency'];
-                userPrimaryLocations = user.primaryLocations ? user.primaryLocations.split('|').map(l => l.trim()).filter(Boolean) : [];
-                showDashboard();
+                applyLoginSuccess(user);
+            }
+        });
+    }
+
+    function applyLoginSuccess(user) {
+        currentUser = { email: user.email, name: user.name };
+        userRole = user.role;
+        userLocations = user.locations ? user.locations.split(',').map(l => l.trim()) : [];
+        // Fix: actually load and store AST quals from login response
+        userQuals = user.astQuals ? user.astQuals.split(',').map(q => q.trim()) : ['Emergency'];
+        userPrimaryLocations = user.primaryLocations ? user.primaryLocations.split('|').map(l => l.trim()).filter(Boolean) : [];
+        showDashboard();
+    }
+
+    function showTotpLoginError(msg) {
+        const el = document.getElementById('totpLoginError');
+        if (el) { el.textContent = msg; el.style.display = 'block'; }
+    }
+
+    function submitTotpLogin() {
+        const code = document.getElementById('totpLoginCodeInput').value.trim();
+        const errEl = document.getElementById('totpLoginError');
+        errEl.style.display = 'none';
+
+        if (!code) { showTotpLoginError('Please enter a code'); return; }
+
+        callBackend('completeTotpLogin', { token: pendingTotpToken, code }).then(user => {
+            if (user && user.error) {
+                showTotpLoginError(user.error);
+                return;
+            }
+            if (user) {
+                pendingTotpToken = null;
+                document.getElementById('totpLoginScreen').style.display = 'none';
+                applyLoginSuccess(user);
             }
         });
     }
@@ -1426,6 +1474,10 @@
                         <div class="form-group"><label>Confirm New Password</label><input type="password" id="confirmPasswordInput" autocomplete="new-password"></div>
                         <div id="changePasswordError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
                         <button class="btn-primary" onclick="changePassword()">Change Password</button>
+                    </div>
+                    <div class="settings-section" style="margin-top:30px;">
+                        <h4>Two-Factor Authentication</h4>
+                        <div id="totpContainer"></div>
                     </div>
                 </div>
             `;
@@ -1504,6 +1556,10 @@
                         <div id="changePasswordError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
                         <button class="btn-primary" onclick="changePassword()">Change Password</button>
                     </div>
+                    <div class="settings-section" style="margin-top:30px;">
+                        <h4>Two-Factor Authentication</h4>
+                        <div id="totpContainer"></div>
+                    </div>
                 </div>
             `;
             populateSwapLocations();
@@ -1511,6 +1567,7 @@
             loadASTCheckboxes();
             loadMyRosterListSection(); // PHASE 4 — now backs the Roster Planner tab, not Settings
             loadNotificationToggle();
+            loadTotpSection();
         }
     }
 
@@ -1524,7 +1581,7 @@
             if (idx === 0) loadMyVacancies();
             if (idx === 1) loadOfficerApprovals();
             if (idx === 2) loadPendingSwaps();
-            if (idx === 3) loadOfficerSettings();
+            if (idx === 3) { loadOfficerSettings(); loadTotpSection(); }
         } else {
             if (idx === 0) loadMyRosterListSection();
             if (idx === 1) loadStaffShifts();
@@ -2635,6 +2692,85 @@
                 showMessage('✓ Password changed', 'success');
             }
         });
+    }
+
+    // Shared by both Staff and Officer Settings tabs, same as changePassword above.
+    // Checks actual enrollment status via getTotpStatus before deciding what to
+    // render — an enabled account gets a static "enabled" state with nothing
+    // clickable, so there's no way to land back in the enrollment flow (and
+    // trip generateTotpSecret's already-enabled guard) from here.
+    async function loadTotpSection() {
+        const container = document.getElementById('totpContainer');
+        if (!container) return;
+        container.innerHTML = '<p style="color:#999;font-size:13px;">Loading 2FA status...</p>';
+
+        const status = await callBackend('getTotpStatus', { email: currentUser.email });
+        if (!container.isConnected) return; // tab switched away while awaiting
+
+        if (status && status.enabled) {
+            container.innerHTML = '<p style="color:#155724;font-size:13px;">✓ Two-factor authentication is enabled on your account.</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <p style="color:#666;font-size:13px;margin-bottom:12px;">Add an extra layer of security to your account using an authenticator app (e.g. Google Authenticator, Authy).</p>
+            <button class="btn-primary" onclick="startTotpEnrollment()">Enable 2FA</button>
+        `;
+    }
+
+    async function startTotpEnrollment() {
+        const container = document.getElementById('totpContainer');
+        container.innerHTML = '<p style="color:#999;font-size:13px;">Generating your 2FA setup...</p>';
+        const result = await callBackend('generateTotpSecret', { email: currentUser.email });
+        if (result.error) {
+            showMessage('Error enabling 2FA: ' + result.error, 'error');
+            loadTotpSection();
+            return;
+        }
+        renderTotpEnrollment(result);
+    }
+
+    function renderTotpEnrollment(data) {
+        const container = document.getElementById('totpContainer');
+        if (!container) return;
+        const codesHtml = data.recoveryCodes.map(c =>
+            `<code style="display:inline-block;background:#f0f0f0;padding:4px 8px;border-radius:4px;margin:3px;font-size:13px;">${c}</code>`
+        ).join('');
+        container.innerHTML = `
+            <p style="color:#666;font-size:13px;margin-bottom:12px;">Scan this QR code with your authenticator app, then enter the 6-digit code it shows to finish setup.</p>
+            <img src="${data.qrCodeDataUrl}" alt="2FA QR code" style="display:block;margin-bottom:12px;border:1px solid #e0e0e0;border-radius:4px;padding:8px;background:white;width:200px;height:200px;">
+            <div class="form-group">
+                <label>Can't scan? Enter this key manually</label>
+                <input type="text" readonly value="${data.secret}" style="font-family:monospace;" onclick="this.select()">
+            </div>
+            <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:#856404;">
+                <strong>Save these recovery codes now — they will not be shown again.</strong> Each one can be used once if you lose access to your authenticator app.
+                <div style="margin-top:8px;">${codesHtml}</div>
+            </div>
+            <div class="form-group"><label>Enter the 6-digit code from your app</label><input type="text" id="totpConfirmCode" inputmode="numeric" maxlength="6" placeholder="123456" onkeypress="if(event.key==='Enter') submitTotpConfirmation()"></div>
+            <div id="totpEnrollError" style="display:none;background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;border-radius:4px;padding:8px 12px;font-size:13px;margin-bottom:12px;"></div>
+            <button class="btn-primary" onclick="submitTotpConfirmation()">Confirm and Enable</button>
+        `;
+    }
+
+    async function submitTotpConfirmation() {
+        const codeInput = document.getElementById('totpConfirmCode');
+        const errEl = document.getElementById('totpEnrollError');
+        const code = codeInput ? codeInput.value.trim() : '';
+
+        if (!code) { errEl.textContent = 'Please enter the 6-digit code'; errEl.style.display = 'block'; return; }
+        errEl.style.display = 'none';
+
+        const result = await callBackend('confirmTotpEnrollment', { email: currentUser.email, code });
+        if (result.error) {
+            errEl.textContent = result.error;
+            errEl.style.display = 'block';
+            return;
+        }
+
+        showMessage('✓ Two-factor authentication enabled', 'success');
+        const container = document.getElementById('totpContainer');
+        if (container) container.innerHTML = '<p style="color:#155724;font-size:13px;">✓ Two-factor authentication is enabled on your account.</p>';
     }
 
     // ============================================================

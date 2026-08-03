@@ -73,6 +73,10 @@ const server = http.createServer((req, res) => {
         case 'getAllLocations':              result = await users.getAllLocations(); break;
         case 'savePushSubscription':       result = await push.savePushSubscription(params.email, params.subscription); break; // PHASE 3
         case 'deactivatePushSubscription': result = await push.deactivatePushSubscription(params.email, params.endpoint); break; // PHASE 3
+        case 'generateTotpSecret':         result = await users.generateTotpSecret(params.email); break;
+        case 'confirmTotpEnrollment':      result = await users.confirmTotpEnrollment(params.email, params.code); break;
+        case 'completeTotpLogin':          result = await users.completeTotpLogin(params.token, params.code); break;
+        case 'getTotpStatus':              result = await users.getTotpStatus(params.email); break;
         default: result = { error: 'Unknown action: ' + action };
       }
       res.writeHead(200);
